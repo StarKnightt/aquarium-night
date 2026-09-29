@@ -25,6 +25,7 @@ export function createInteraction({ canvas, camera, controls, sys, events }) {
   const TAP_PX = 6;
   const TAP_MS = 400;
 
+  let enabled = true;
   let ptrId = -1;
   let downX = 0;
   let downY = 0;
@@ -127,6 +128,7 @@ export function createInteraction({ canvas, camera, controls, sys, events }) {
   }
 
   function onPointerDown(e) {
+    if (!enabled) return;
     if (e.button !== 0 && e.pointerType === 'mouse') return;
     if (ptrId !== -1) return;
     ptrId = e.pointerId;
@@ -139,6 +141,7 @@ export function createInteraction({ canvas, camera, controls, sys, events }) {
   }
 
   function onPointerMove(e) {
+    if (!enabled) return;
     if (ptrId === e.pointerId) {
       const dx = e.clientX - downX;
       const dy = e.clientY - downY;
@@ -160,6 +163,7 @@ export function createInteraction({ canvas, camera, controls, sys, events }) {
   }
 
   function onPointerUp(e) {
+    if (!enabled) return;
     if (e.pointerId !== ptrId) return;
     const dt = performance.now() - downT;
     const dx = e.clientX - downX;
@@ -190,6 +194,7 @@ export function createInteraction({ canvas, camera, controls, sys, events }) {
   }
 
   function onPointerCancel(e) {
+    if (!enabled) return;
     if (e.pointerId !== ptrId) return;
     ptrId = -1;
     dragging = false;
@@ -219,6 +224,18 @@ export function createInteraction({ canvas, camera, controls, sys, events }) {
   }
 
   return {
+    setEnabled(v) {
+      enabled = !!v;
+      if (!enabled) {
+        ptrId = -1;
+        dragging = false;
+        hover = 'none';
+        canvas.style.cursor = 'grab';
+      } else {
+        applyCursor();
+      }
+    },
+    get enabled() { return enabled; },
     dispose() {
       canvas.removeEventListener('pointerdown', onPointerDown);
       canvas.removeEventListener('pointermove', onPointerMove);

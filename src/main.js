@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { Q, isDebug } from './core/quality.js';
+import { Q, isDebug, isCine } from './core/quality.js';
 import { WU } from './core/waterPatch.js';
 import { createRoom } from './systems/room.js';
 import { createPost } from './systems/post.js';
@@ -11,17 +11,21 @@ import { createFish } from './systems/fish.js';
 import { createBubbles } from './systems/bubbles.js';
 import { createAudio } from './systems/audio.js';
 import { createInteraction, createEventBus } from './systems/interaction.js';
+import { createCinematic } from './systems/cinematic.js';
+import { createExplore } from './systems/explore.js';
 
 const canvas = document.getElementById('c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance', stencil: false, preserveDrawingBuffer: isDebug });
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 0.92;
+renderer.toneMappingExposure = isCine ? 0.98 : 0.92;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.setClearColor(0x000000, 1);
 
+const wantExplore = new URLSearchParams(location.search).has('explore');
+
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(32, innerWidth / innerHeight, 0.03, 40);
+const camera = new THREE.PerspectiveCamera(32, innerWidth / innerHeight, isCine ? 0.012 : 0.03, 40);
 
 // ---- systems (each added in its own gauntlet stage)
 const sys = {};
@@ -76,6 +80,7 @@ function applyOrbitLimits() {
 
 const post = createPost(renderer, scene, camera); console.log('boot: post ok');
 
+let explore = null;
 let baseDist = 1.4;
 function frameCamera(keepAngles = false) {
   const aspect = innerWidth / innerHeight;
@@ -103,13 +108,22 @@ function frameCamera(keepAngles = false) {
 }
 
 function resize() {
-  const pr = Math.min(devicePixelRatio || 1, Q.maxDPR) * (window.__aqScale || 1);
+  // Cinematic capture locks DPR=1 so the canvas pixel size matches the viewport exactly.
+  const pr = isCine ? 1 : Math.min(devicePixelRatio || 1, Q.maxDPR) * (window.__aqScale || 1);
   renderer.setPixelRatio(pr);
   renderer.setSize(innerWidth, innerHeight, false);
   post.setSize(innerWidth, innerHeight, pr);
-  frameCamera(true);
+  if (!isCine && !(explore?.active || explore?.restoring)) frameCamera(true);
+  else if (!isCine) {
+    camera.aspect = innerWidth / innerHeight;
+    camera.updateProjectionMatrix();
+  } else {
+    camera.aspect = innerWidth / innerHeight;
+    camera.updateProjectionMatrix();
+  }
+  sys.water?.resize?.(pr);
 }
-frameCamera(false);
+if (!isCine) frameCamera(false);
 resize();
 addEventListener('resize', resize);
 
@@ -117,28 +131,81 @@ addEventListener('resize', resize);
 addEventListener('gesturestart', (e) => e.preventDefault());
 addEventListener('gesturechange', (e) => e.preventDefault());
 
-// ---- interaction (tap feed / glass scare; drag left to OrbitControls)
+// ---- interaction (tap feed / glass scare; drag left to OrbitControls) — disabled in cine mode
 const events = createEventBus();
-sys.interaction = createInteraction({ canvas, camera, controls, sys, events });
-
-// ---- sound: starts on the first user gesture (browser autoplay rules), tap on glass = tiny knock
-events.on('tap', ({ point }) => { if (point.y < 0.41) audio.tap({ x: point.x, strength: 1 }); });
+if (!isCine) {
+  sys.interaction = createInteraction({ canvas, camera, controls, sys, events });
+  events.on('tap', ({ point }) => { if (point.y < 0.41) audio.tap({ x: point.x, strength: 1 }); });
+}
 const sndBtn = document.getElementById('snd');
 const setSndIcon = () => {
   document.getElementById('snd-on').style.display = audio.muted ? 'none' : '';
   document.getElementById('snd-off').style.display = audio.muted ? '' : 'none';
 };
-const kick = () => { audio.start(); audio.resume(); };
-addEventListener('pointerdown', kick, { once: false, passive: true });
-addEventListener('keydown', kick, { passive: true });
-sndBtn.addEventListener('pointerdown', (e) => e.stopPropagation());
-sndBtn.addEventListener('click', () => { if (!audio.started) audio.start(); audio.resume(); audio.setMuted(!audio.muted); setSndIcon(); });
+if (!isCine) {
+  const kick = () => { audio.start(); audio.resume(); };
+  addEventListener('pointerdown', kick, { once: false, passive: true });
+  addEventListener('keydown', kick, { passive: true });
+  sndBtn.addEventListener('pointerdown', (e) => e.stopPropagation());
+  sndBtn.addEventListener('click', () => { if (!audio.started) audio.start(); audio.resume(); audio.setMuted(!audio.muted); setSndIcon(); });
+}
 window.__audio = audio;
 
-// ---- adaptive resolution scaler (keeps phones smooth; never below 0.6)
+// ---- explore mode (free-fly in/out of tank)
+function getHomePose() {
+  const aspect = innerWidth / innerHeight;
+  const fov = aspect < 1 ? 46 : 32;
+  const vfov = THREE.MathUtils.degToRad(fov);
+  const needW = 1.18;
+  const dW = needW / (2 * Math.tan(vfov / 2) * aspect);
+  const dH = 0.95 / (2 * Math.tan(vfov / 2));
+  const dist = Math.max(dW, dH, 1.1);
+  const polar = 1.18, az = 0;
+  return {
+    pos: [
+      target.x + dist * Math.sin(polar) * Math.sin(az),
+      target.y + dist * Math.cos(polar),
+      target.z + dist * Math.sin(polar) * Math.cos(az),
+    ],
+    look: target.toArray(),
+    fov,
+  };
+}
+
+if (!isCine) {
+  explore = createExplore({
+    canvas, camera, controls, sys, events, audio,
+    getHomePose,
+    onRestored() {
+      applyOrbitLimits();
+      sys.interaction?.setEnabled(true);
+    },
+  });
+  const exploreBtn = document.getElementById('explore');
+  exploreBtn?.addEventListener('pointerdown', (e) => e.stopPropagation());
+  exploreBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const next = !(explore.active || explore.restoring);
+    explore.setActive(next);
+    sys.interaction?.setEnabled(!next);
+    if (!next) applyOrbitLimits();
+  });
+  if (wantExplore) {
+    requestAnimationFrame(() => {
+      explore.setActive(true);
+      sys.interaction?.setEnabled(false);
+    });
+  }
+} else {
+  const el = document.getElementById('explore');
+  if (el) { el.style.display = 'none'; el.style.opacity = '0'; }
+}
+
+// ---- adaptive resolution scaler (keeps phones smooth; never below 0.6) — off in cine
 window.__aqScale = window.__aqScale || 1;
 let _ftSum = 0, _ftN = 0, _ftLast = performance.now(), _scaleCool = 0;
 function adaptScale(now) {
+  if (isCine || window.__cineNoAdapt) return;
   const ft = now - _ftLast;
   _ftLast = now;
   if (ft <= 0 || ft > 120) return;
@@ -168,12 +235,47 @@ function update(dt) {
   WU.uTime.value = simTime;
   for (const k in sys) sys[k].update?.(dt, simTime);
 }
+
+// Cinematic mode (?cine=1): scripted camera, no UI, deterministic seek API
+let cine = null;
+if (isCine) {
+  cine = createCinematic({ camera, controls, renderer, post, sys, update, clock });
+  window.__cine = {
+    duration: cine.duration,
+    fps: cine.fps,
+    totalFrames: cine.totalFrames,
+    warmupSec: cine.warmupSec,
+    seek: (i) => cine.seek(i),
+    warmup: () => cine.warmup(),
+    playLive: () => cine.playLive(),
+    renderSoundtrack: () => cine.renderSoundtrack(),
+    ready: true,
+  };
+  // Auto live-preview when opened in a browser (not driven by seek within 2s)
+  setTimeout(() => {
+    if (cine && !cine.isCapture?.() === false) { /* noop guard */ }
+    // If still frozen and no seek happened, start live loop for human preview
+    if (cine && cine.isCapture() && !window.__cine._seeked) {
+      // keep frozen for harness — recording always calls warmup/seek first
+      // For human: ?cine=1&live=1
+      if (new URLSearchParams(location.search).has('live')) cine.playLive();
+    }
+  }, 100);
+}
+
 let dbgQuad = null;
 function frame() {
+  if (cine?.isCapture()) {
+    // Deterministic capture owns sim + render via __cine.seek — skip RAF work.
+    requestAnimationFrame(frame);
+    return;
+  }
   const now = performance.now();
   const dt = Math.min(clock.getDelta(), 0.05);
   update(dt);
-  controls.update();
+  if (cine) cine.tickLive(simTime);
+  else if (explore && (explore.active || explore.restoring)) explore.update(dt);
+  else controls.update();
   if (window.__aqDbg === 'caustics') {
     if (!dbgQuad) {
       dbgQuad = { scene: new THREE.Scene(), cam: new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1) };
@@ -188,19 +290,39 @@ function frame() {
 }
 requestAnimationFrame(frame);
 
-const veil = document.getElementById('veil');
-setTimeout(() => { veil.style.opacity = 0; }, 300);
-setTimeout(() => { veil.style.display = 'none'; }, 2600);
-setTimeout(() => { document.getElementById('hint').style.opacity = 0; }, 9000);
+if (!isCine) {
+  const veil = document.getElementById('veil');
+  setTimeout(() => { veil.style.opacity = 0; }, 300);
+  setTimeout(() => { veil.style.display = 'none'; }, 2600);
+  setTimeout(() => { document.getElementById('hint').style.opacity = 0; }, 9000);
+} else {
+  // Cine: kill overlays immediately (no fade text)
+  for (const id of ['hint', 'snd', 'explore', 'veil']) {
+    const el = document.getElementById(id);
+    if (el) { el.style.display = 'none'; el.style.opacity = '0'; }
+  }
+}
 
 // ---- debug/screenshot API (used by the critic harness; harmless in production)
 window.__aqU = WU;
 window.__aq = {
-  ready: true, scene, camera, controls, renderer, sys, events,
+  ready: true, scene, camera, controls, renderer, sys, events, explore,
   defaultCam: { pos: camera.position.toArray(), look: target.toArray() },
   applyOrbitLimits,
+  setExplore(on) {
+    if (!explore) return false;
+    const next = !!on;
+    explore.setActive(next);
+    sys.interaction?.setEnabled(!next);
+    if (!next) applyOrbitLimits();
+    return explore.active;
+  },
   setCam(pos, look) {
     // Unlock clamps so harness can place arbitrary views; call applyOrbitLimits() to restore.
+    if (explore?.active) {
+      explore.setActive(false, { instant: true });
+      sys.interaction?.setEnabled(true);
+    }
     controls.minAzimuthAngle = -Infinity;
     controls.maxAzimuthAngle = Infinity;
     controls.minPolarAngle = 0;

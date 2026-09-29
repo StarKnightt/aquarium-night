@@ -4,6 +4,8 @@
 //  * glass tap: click + damped glass partials + a low thump through the water
 export function createAudio() {
   let ctx = null, master = null, humGain = null, started = false, muted = false, noiseBuf = null;
+  let underwaterLP = null;
+  let underwater = false;
   const AC = window.AudioContext || window.webkitAudioContext;
 
   function makeNoise(seconds, color) {
@@ -37,7 +39,14 @@ export function createAudio() {
     master.gain.value = 0;
     const comp = ctx.createDynamicsCompressor();
     comp.threshold.value = -18; comp.ratio.value = 3;
-    master.connect(comp); comp.connect(ctx.destination);
+    // Optional underwater muffling — open by default (~full bandwidth)
+    underwaterLP = ctx.createBiquadFilter();
+    underwaterLP.type = 'lowpass';
+    underwaterLP.frequency.value = 18000;
+    underwaterLP.Q.value = 0.7;
+    master.connect(underwaterLP);
+    underwaterLP.connect(comp);
+    comp.connect(ctx.destination);
     noiseBuf = makeNoise(1, 'white');
 
     // ---- filter hum bed
@@ -121,6 +130,16 @@ export function createAudio() {
     start,
     resume() { if (ctx && ctx.state === 'suspended') ctx.resume(); },
     setMuted(m) { muted = m; if (!started && !m) start(); fade(m ? 0 : 1, 0.4); },
+    setUnderwater(on) {
+      underwater = !!on;
+      if (!ctx || !underwaterLP) return;
+      const t = ctx.currentTime;
+      const target = underwater ? 720 : 18000;
+      underwaterLP.frequency.cancelScheduledValues(t);
+      underwaterLP.frequency.setValueAtTime(underwaterLP.frequency.value, t);
+      underwaterLP.frequency.exponentialRampToValueAtTime(Math.max(target, 80), t + 0.4);
+    },
+    get underwater() { return underwater; },
     /** Minnaert bubble: f ~ 3.26 / r (r in m) -> 1.2-4.6 kHz, chirping upward as it detaches */
     bubble({ x = 0, r = 0.0015 } = {}) {
       if (!ctx || muted) return;

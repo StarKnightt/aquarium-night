@@ -319,6 +319,7 @@ export function createWater(scene, renderer) {
   scene.add(surface.mesh, rays.mesh, particles.pts, meniscus, meniscus2);
   return {
     surface, rays, particles, caustics,
+    meniscus, meniscus2,
     addRipple: surface.addRipple,
     resize(pxRatio) { particles.mat.uniforms.uPx.value = pxRatio; },
     update(dt, t) { caustics.update(dt, t); },

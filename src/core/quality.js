@@ -44,5 +44,6 @@ export const Q = low
       grain: true,
     };
 
-export const isDebug = params.has('debug') || params.has('shot');
+export const isDebug = params.has('debug') || params.has('shot') || params.has('cine');
+export const isCine = params.has('cine');
 export const seedParam = Number(params.get('seed') || 7);

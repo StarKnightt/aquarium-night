@@ -25,14 +25,20 @@
     padding: 8px 14px; border-radius: 999px; pointer-events: none; transition: opacity 1.6s ease; white-space: nowrap;
     z-index: 3;
   }
-  #snd {
-    position: fixed; right: max(14px, env(safe-area-inset-right)); bottom: max(14px, env(safe-area-inset-bottom));
+  #snd, #explore {
+    position: fixed; bottom: max(14px, env(safe-area-inset-bottom));
     width: 38px; height: 38px; border-radius: 50%; border: 1px solid rgba(180, 215, 230, .18);
     background: rgba(4, 10, 14, .45); backdrop-filter: blur(6px); color: rgba(200, 225, 235, .7);
     display: grid; place-items: center; cursor: pointer; padding: 0; opacity: .8; z-index: 3;
   }
-  #snd:hover { opacity: 1; }
-  #snd svg { width: 18px; height: 18px; }
+  #snd { right: max(14px, env(safe-area-inset-right)); }
+  #explore { right: max(60px, calc(env(safe-area-inset-right) + 52px)); }
+  #snd:hover, #explore:hover { opacity: 1; }
+  #explore.on {
+    opacity: 1; color: rgba(160, 220, 235, .95);
+    border-color: rgba(120, 200, 220, .45); background: rgba(10, 30, 40, .6);
+  }
+  #snd svg, #explore svg { width: 18px; height: 18px; }
   #veil {
     position: fixed; inset: 0; background: #020305; transition: opacity 2.2s ease;
     pointer-events: none; z-index: 2;
@@ -42,8 +48,16 @@
 <body>
 <canvas id="c" tabindex="0"></canvas>
 <div id="hint">tap the water to feed &nbsp;·&nbsp; tap the glass &nbsp;·&nbsp; drag to look around</div>
-<button id="snd" aria-label="Toggle sound" title="Sound" type="button">
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+<button id="explore" aria-label="Toggle explore" type="button">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <circle cx="12" cy="12" r="9"/>
+    <circle cx="12" cy="12" r="3.2"/>
+    <path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21"/>
+    <path d="m7.05 7.05 1.6 1.6M15.35 15.35l1.6 1.6M15.35 8.65l1.6-1.6M7.05 16.95l1.6-1.6"/>
+  </svg>
+</button>
+<button id="snd" aria-label="Toggle sound" type="button">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
     <path d="M11 5 6 9H3v6h3l5 4z"/><path id="snd-on" d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/><path id="snd-off" d="m16 9 5 6M21 9l-5 6" style="display:none"/>
   </svg>
 </button>
