@@ -1,0 +1,12 @@
+import { chromium } from 'playwright-core';
+const browser = await chromium.launch({ executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe', headless:true, args:['--use-angle=d3d11','--ignore-gpu-blocklist','--enable-webgl','--no-sandbox']});
+const page = await browser.newPage({viewport:{width:800,height:450}});
+page.on('console', m=>console.log('[c]',m.type(), m.text().slice(0,300)));
+page.on('pageerror', e=>console.log('[err]', e.message.slice(0,500)));
+let pending=new Set();
+page.on('request', r=>pending.add(r.url())); page.on('requestfinished', r=>pending.delete(r.url())); page.on('requestfailed', r=>{console.log('failed', r.url()); pending.delete(r.url())});
+await page.goto('http://localhost:5199/?shot=1&q=high',{waitUntil:'load'});
+await page.waitForTimeout(6000);
+console.log('pending', [...pending].slice(0,10));
+console.log(await page.evaluate(()=>({rs:document.readyState, aq:!!window.__aq, res: performance.getEntriesByType('resource').length})));
+await browser.close();

@@ -1,0 +1,10 @@
+import { chromium } from 'playwright-core';
+const browser = await chromium.launch({ executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe', headless:true, args:['--use-angle=d3d11','--ignore-gpu-blocklist','--enable-webgl','--no-sandbox']});
+const page = await browser.newPage({viewport:{width:900,height:900}});
+page.on('pageerror', e=>console.log('[err]', e.message.slice(0,500)));
+await page.goto('http://localhost:5199/?shot=1&q=high',{waitUntil:'load'});
+await page.waitForFunction(()=>window.__aq&&window.__aq.ready);
+await page.evaluate(()=>{document.getElementById('veil').style.display='none';document.getElementById('hint').style.display='none';document.getElementById('snd').style.display='none'; window.__aqDbg='caustics'; window.__aq.advance(5);});
+await page.waitForTimeout(800);
+await page.screenshot({path:'shots/dbg_caustics.png'});
+await browser.close();

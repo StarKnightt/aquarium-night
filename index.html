@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<meta name="theme-color" content="#020305" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23020305'/%3E%3Crect x='4' y='8' width='24' height='16' rx='2' fill='%230a3040' stroke='%234a8aa0' stroke-width='1.5'/%3E%3Ccircle cx='12' cy='15' r='2' fill='%23c8e0a0'/%3E%3Ccircle cx='20' cy='18' r='1.5' fill='%23e0b070'/%3E%3C/svg%3E" />
+<title>Aquarium at night</title>
+<style>
+  html, body {
+    margin: 0; height: 100%; background: #020305; overflow: hidden;
+    overscroll-behavior: none; touch-action: none;
+    -webkit-user-select: none; user-select: none;
+    -webkit-touch-callout: none;
+  }
+  canvas#c {
+    position: fixed; inset: 0; width: 100%; height: 100%; display: block;
+    touch-action: none; outline: none; z-index: 1; cursor: grab;
+  }
+  canvas#c:active { cursor: grabbing; }
+  #hint {
+    position: fixed; left: 50%; bottom: max(18px, env(safe-area-inset-bottom)); transform: translateX(-50%);
+    font: 500 12px/1.4 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; letter-spacing: .04em;
+    color: rgba(200, 225, 235, .55); background: rgba(4, 10, 14, .45); backdrop-filter: blur(6px);
+    padding: 8px 14px; border-radius: 999px; pointer-events: none; transition: opacity 1.6s ease; white-space: nowrap;
+    z-index: 3;
+  }
+  #snd {
+    position: fixed; right: max(14px, env(safe-area-inset-right)); bottom: max(14px, env(safe-area-inset-bottom));
+    width: 38px; height: 38px; border-radius: 50%; border: 1px solid rgba(180, 215, 230, .18);
+    background: rgba(4, 10, 14, .45); backdrop-filter: blur(6px); color: rgba(200, 225, 235, .7);
+    display: grid; place-items: center; cursor: pointer; padding: 0; opacity: .8; z-index: 3;
+  }
+  #snd:hover { opacity: 1; }
+  #snd svg { width: 18px; height: 18px; }
+  #veil {
+    position: fixed; inset: 0; background: #020305; transition: opacity 2.2s ease;
+    pointer-events: none; z-index: 2;
+  }
+</style>
+</head>
+<body>
+<canvas id="c" tabindex="0"></canvas>
+<div id="hint">tap the water to feed &nbsp;·&nbsp; tap the glass &nbsp;·&nbsp; drag to look around</div>
+<button id="snd" aria-label="Toggle sound" title="Sound" type="button">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M11 5 6 9H3v6h3l5 4z"/><path id="snd-on" d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/><path id="snd-off" d="m16 9 5 6M21 9l-5 6" style="display:none"/>
+  </svg>
+</button>
+<div id="veil"></div>
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>

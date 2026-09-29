@@ -1,0 +1,42 @@
+import { chromium } from 'playwright-core';
+const browser = await chromium.launch({ executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe', headless:true, args:['--use-angle=d3d11','--ignore-gpu-blocklist','--enable-webgl','--no-sandbox']});
+const page = await browser.newPage({viewport:{width:1000,height:600}});
+page.on('pageerror', e=>console.log('[err]', e.message.slice(0,500)));
+page.on('console', m=>{ if(m.type()==='error') console.log('[c]', m.text().slice(0,300)); });
+await page.goto('http://localhost:5199/?shot=1&q=high',{waitUntil:'load'});
+await page.waitForFunction(()=>window.__aq&&window.__aq.ready);
+const r = await page.evaluate(()=>{
+  const aq = window.__aq, fish = aq.sys.fish, food = aq.sys.food;
+  const out = {};
+  aq.advance(20);
+  const st = () => fish.fishes.map(f=>({k:f.key, x:+f.pos.x.toFixed(2), y:+f.pos.y.toFixed(2), z:+f.pos.z.toFixed(2), s:+(f.spd*100).toFixed(1)}));
+  out.bounds = st().every(f=>Math.abs(f.x)<0.5&&f.y>0&&f.y<0.42&&Math.abs(f.z)<0.21);
+  out.start = st().slice(0,5);
+  const meanSpd = () => fish.fishes.reduce((a,f)=>a+f.spd,0)/fish.fishes.length*100;
+  out.baseSpeedCms = +meanSpd().toFixed(2);
+  // feed
+  food.drop(0.05, 0.0, 12);
+  aq.advance(3);
+  out.flakesAfter3s = food.flakes.length;
+  aq.advance(12);
+  out.flakesAfter15s = food.flakes.length;
+  out.hunger = fish.fishes.map(f=>+f.hunger.toFixed(2));
+  aq.advance(30);
+  out.flakesAfter45s = food.flakes.length;
+  // scare
+  aq.advance(5);
+  const before = meanSpd();
+  fish.scare({x:0.0,y:0.2,z:0.21}, 1);
+  aq.advance(0.4);
+  out.speedAfterTap = +meanSpd().toFixed(2);
+  aq.advance(2);
+  out.speed2s = +meanSpd().toFixed(2);
+  aq.advance(10);
+  out.speed12s = +meanSpd().toFixed(2);
+  out.panicLeft = fish.fishes.filter(f=>f.panic>0.01).length;
+  out.finalBounds = st().every(f=>Math.abs(f.x)<0.5&&f.y>0&&f.y<0.42&&Math.abs(f.z)<0.21);
+  out.nan = st().some(f=>Number.isNaN(f.x)||Number.isNaN(f.y));
+  return out;
+});
+console.log(JSON.stringify(r,null,1));
+await browser.close();
