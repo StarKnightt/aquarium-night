@@ -135,6 +135,31 @@ sndBtn.addEventListener('pointerdown', (e) => e.stopPropagation());
 sndBtn.addEventListener('click', () => { if (!audio.started) audio.start(); audio.resume(); audio.setMuted(!audio.muted); setSndIcon(); });
 window.__audio = audio;
 
+// ---- adaptive resolution scaler (keeps phones smooth; never below 0.6)
+window.__aqScale = window.__aqScale || 1;
+let _ftSum = 0, _ftN = 0, _ftLast = performance.now(), _scaleCool = 0;
+function adaptScale(now) {
+  const ft = now - _ftLast;
+  _ftLast = now;
+  if (ft <= 0 || ft > 120) return;
+  _ftSum += ft;
+  _ftN++;
+  _scaleCool -= ft;
+  if (_ftN < 45 || _scaleCool > 0) return; // ~0.75s of samples
+  const avg = _ftSum / _ftN;
+  _ftSum = 0;
+  _ftN = 0;
+  const cur = window.__aqScale || 1;
+  let next = cur;
+  if (avg > 24 && cur > 0.6) next = Math.max(0.6, cur * 0.88);
+  else if (avg < 12 && cur < 1) next = Math.min(1, cur * 1.04);
+  if (Math.abs(next - cur) > 0.01) {
+    window.__aqScale = next;
+    _scaleCool = 900;
+    resize();
+  }
+}
+
 // ---- loop
 const clock = new THREE.Clock();
 let simTime = 0;
@@ -145,6 +170,7 @@ function update(dt) {
 }
 let dbgQuad = null;
 function frame() {
+  const now = performance.now();
   const dt = Math.min(clock.getDelta(), 0.05);
   update(dt);
   controls.update();
@@ -157,6 +183,7 @@ function frame() {
     dbgQuad.mat.uniforms.t.value = sys.water.caustics.rt.texture;
     renderer.setRenderTarget(null); renderer.render(dbgQuad.scene, dbgQuad.cam);
   } else post.render(dt, simTime);
+  adaptScale(now);
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);

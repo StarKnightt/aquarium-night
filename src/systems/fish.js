@@ -110,9 +110,10 @@ export function createFish(scene, { scenery, food, water, onEvent }) {
 
   for (const [key, sp] of Object.entries(SPECIES)) {
     const n = sp.count;
-    // smoother silhouettes for tetras / angels (faceting was causing hard speculars)
-    const seg = Math.max(Q.fishSeg, key === 'angel' || key === 'neon' ? 36 : key === 'platy' ? 32 : Q.fishSeg);
-    const ring = Math.max(Q.fishRing, key === 'angel' || key === 'neon' ? 16 : 14);
+    // smoother silhouettes on high; low tier keeps Q caps for phone cost
+    const hi = Q.name !== 'low';
+    const seg = Math.max(Q.fishSeg, hi ? (key === 'angel' || key === 'neon' ? 36 : key === 'platy' ? 32 : Q.fishSeg) : Q.fishSeg);
+    const ring = Math.max(Q.fishRing, hi ? (key === 'angel' || key === 'neon' ? 16 : 14) : Q.fishRing);
     const { body, fins } = buildFishGeometry(sp, seg, ring);
     const attrs = {
       iPhase: new THREE.InstancedBufferAttribute(new Float32Array(n), 1),
