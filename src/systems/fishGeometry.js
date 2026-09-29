@@ -204,30 +204,35 @@ export function buildFishGeometry(sp, seg = 32, ring = 14) {
   body.computeVertexNormals();
 
   // ---- fins — denser grids, curved trailing edges
+  // Angel median fins get a tiny ±X slab so grazing angles stay opaque (not paper-thin ghosts).
+  const angelThick = sp === SPECIES.angel ? 0.011 * L : 0;
   const fp = [], ft = [], ff = [], fs = [], fd = [], fuv = [], fi = [];
-  const gridFin = (baseFn, outerFn, rows, cols, type, side = 0, curve = 0.18) => {
-    const start = fp.length / 3;
-    for (let r = 0; r <= rows; r++) {
-      const s = r / rows;
-      const b = baseFn(s), o = outerFn(s);
-      for (let c = 0; c <= cols; c++) {
-        const k = c / cols;
-        // ease toward tip + soft lateral bow so edges aren't hard triangles
-        const ke = k * k * (3 - 2 * k);
-        const bow = Math.sin(k * Math.PI) * curve * (0.35 + 0.65 * Math.sin(s * Math.PI));
-        const x = b[0] + (o[0] - b[0]) * ke;
-        const y = b[1] + (o[1] - b[1]) * ke + bow * (type === 1 ? (s * 2 - 1) * 0.002 : 0);
-        const z = b[2] + (o[2] - b[2]) * ke;
-        // round the trailing free edge slightly inward at corners
-        const edgeSoft = (c === cols ? 0.92 + 0.08 * Math.sin(s * Math.PI) : 1);
-        fp.push(x * edgeSoft + b[0] * (1 - edgeSoft), y, z);
-        ft.push((L / 2 - z) / L); ff.push(type); fs.push(side); fd.push(k);
-        fuv.push(...uvOf(x, y, z));
+  const gridFin = (baseFn, outerFn, rows, cols, type, side = 0, curve = 0.18, thick = 0) => {
+    const layers = thick > 0 ? [-1, 1] : [0];
+    for (const sx of layers) {
+      const start = fp.length / 3;
+      for (let r = 0; r <= rows; r++) {
+        const s = r / rows;
+        const b = baseFn(s), o = outerFn(s);
+        for (let c = 0; c <= cols; c++) {
+          const k = c / cols;
+          // ease toward tip + soft lateral bow so edges aren't hard triangles
+          const ke = k * k * (3 - 2 * k);
+          const bow = Math.sin(k * Math.PI) * curve * (0.35 + 0.65 * Math.sin(s * Math.PI));
+          const x = b[0] + (o[0] - b[0]) * ke + sx * thick * (1 - ke * 0.55);
+          const y = b[1] + (o[1] - b[1]) * ke + bow * (type === 1 ? (s * 2 - 1) * 0.002 : 0);
+          const z = b[2] + (o[2] - b[2]) * ke;
+          // round the trailing free edge slightly inward at corners
+          const edgeSoft = (c === cols ? 0.92 + 0.08 * Math.sin(s * Math.PI) : 1);
+          fp.push(x * edgeSoft + b[0] * (1 - edgeSoft), y, z);
+          ft.push((L / 2 - z) / L); ff.push(type); fs.push(side || sx); fd.push(k);
+          fuv.push(...uvOf(x, y, z));
+        }
       }
-    }
-    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
-      const a = start + r * (cols + 1) + c, b = a + 1, c2 = a + cols + 1, d = c2 + 1;
-      fi.push(a, b, c2, b, d, c2);
+      for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+        const a = start + r * (cols + 1) + c, b = a + 1, c2 = a + cols + 1, d = c2 + 1;
+        fi.push(a, b, c2, b, d, c2);
+      }
     }
   };
 
@@ -247,7 +252,7 @@ export function buildFishGeometry(sp, seg = 32, ring = 14) {
         const z = zb - c.len * L * notchK * round;
         return [0, dyOf() + yy * spread * (0.92 + 0.08 * Math.sin(Math.PI * s)), z];
       },
-      12, 7, 1, 0, 0.22
+      12, 7, 1, 0, 0.22, angelThick
     );
   }
   // dorsal (3)
@@ -261,7 +266,7 @@ export function buildFishGeometry(sp, seg = 32, ring = 14) {
         const h = d.h * L * (0.10 + 0.90 * bump) * (sp === SPECIES.angel ? (0.35 + 0.65 * Math.pow(s, 0.5) * (1 - 0.3 * s)) : 1);
         return [0, dyOf() + hyOf(t) * 0.98 + h, zOf(t) - d.sweep * L * bump * (0.35 + 0.65 * s)];
       },
-      12, 5, 3, 0, 0.14
+      12, 5, 3, 0, 0.14, angelThick
     );
   }
   // anal (3)
@@ -275,7 +280,7 @@ export function buildFishGeometry(sp, seg = 32, ring = 14) {
         const h = d.h * L * (0.10 + 0.90 * bump);
         return [0, dyOf() - hyOf(t) * sp.belly * 0.98 - h, zOf(t) - d.sweep * L * bump * (0.35 + 0.65 * s)];
       },
-      12, 5, 3, 0, 0.14
+      12, 5, 3, 0, 0.14, angelThick
     );
   }
   // pectorals (2), mirrored — softer paddle outline
@@ -304,9 +309,9 @@ export function buildFishGeometry(sp, seg = 32, ring = 14) {
       const p = sp.pelvic;
       const hy0 = hyOf(p.t);
       gridFin(
-        (s) => [side * 0.004, dyOf() - hy0 * 0.85, zOf(p.t) - s * 0.03 * L],
-        (s) => [side * 0.006, dyOf() - hy0 * 0.85 - p.len * L * (0.35 + 0.65 * (1 - s * 0.4)), zOf(p.t) - 0.22 * L - s * 0.05 * L],
-        5, 5, 3, 0, 0.1
+        (s) => [side * 0.0045, dyOf() - hy0 * 0.85, zOf(p.t) - s * 0.03 * L],
+        (s) => [side * 0.0075, dyOf() - hy0 * 0.85 - p.len * L * (0.35 + 0.65 * (1 - s * 0.4)), zOf(p.t) - 0.22 * L - s * 0.05 * L],
+        5, 5, 3, side, 0.1, angelThick * 0.55
       );
     }
   }
@@ -477,7 +482,7 @@ export function paintSkin(key, sp) {
   const finCol = {
     neon: [195, 210, 218, 0.42],
     platy: [255, 130, 60, 0.45],
-    angel: [220, 215, 205, 0.55],
+    angel: [232, 228, 218, 0.92],
     cory: [195, 175, 145, 0.42],
   }[key];
   fctx.fillStyle = rgba(...finCol);
@@ -602,7 +607,8 @@ export function paintSkin(key, sp) {
   fctx.save();
   fctx.globalCompositeOperation = 'destination-out';
   const tipFade = fctx.createLinearGradient(px(1.05), 0, W, 0);
-  tipFade.addColorStop(0, 'rgba(0,0,0,0)'); tipFade.addColorStop(1, 'rgba(0,0,0,0.45)');
+  // angel keeps more tip opacity so tall fins don't ghost at grazing angles
+  tipFade.addColorStop(0, 'rgba(0,0,0,0)'); tipFade.addColorStop(1, key === 'angel' ? 'rgba(0,0,0,0.18)' : 'rgba(0,0,0,0.45)');
   fctx.fillStyle = tipFade; fctx.fillRect(px(1.02), 0, W - px(1.02), H);
   fctx.restore();
 

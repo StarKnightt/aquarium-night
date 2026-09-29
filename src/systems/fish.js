@@ -52,7 +52,7 @@ function makeMaterial(key, sp, tex, isFin) {
   const isPlaty = key === 'platy';
   const mat = new THREE.MeshPhysicalMaterial({
     map: isFin ? tex.map : (tex.bodyMap || tex.map),
-    roughness: isFin ? 0.55 : (isAngel ? 0.52 : isPlaty ? 0.30 : 0.38),
+    roughness: isFin ? (isAngel ? 0.42 : 0.55) : (isAngel ? 0.52 : isPlaty ? 0.30 : 0.38),
     metalness: isFin ? 0.0 : (isNeon ? 0.42 : isPlaty ? 0.28 : 0.02),
     metalnessMap: !isFin && tex.metalness ? tex.metalness : null,
     roughnessMap: !isFin && tex.roughness ? tex.roughness : null,
@@ -69,9 +69,9 @@ function makeMaterial(key, sp, tex, isFin) {
     emissiveIntensity: 0,
     side: isFin ? THREE.DoubleSide : THREE.DoubleSide,
     transparent: isFin,
-    opacity: isFin ? (key === 'angel' ? 0.92 : 0.90) : 1,
-    depthWrite: !isFin,
-    alphaTest: 0,
+    opacity: isFin ? (key === 'angel' ? 0.995 : 0.90) : 1,
+    depthWrite: isFin ? isAngel : !isFin,
+    alphaTest: isFin && isAngel ? 0.08 : 0,
   });
   // body must stay opaque regardless of map alpha
   if (!isFin) {
@@ -81,11 +81,21 @@ function makeMaterial(key, sp, tex, isFin) {
     mat.alphaMap = null;
   }
   return patchWater(mat, {
-    key: `fish-${key}-${isFin ? 'f' : 'b'}v6`,
+    key: `fish-${key}-${isFin ? 'f' : 'b'}v7`,
     vertex: fishVertex(sp.L),
     soft: isAngel ? 0.55 : 0.4,
     onShader: isFin
-      ? null
+      ? (isAngel
+        ? (shader) => {
+            shader.fragmentShader = shader.fragmentShader.replace(
+              '#include <map_fragment>',
+              `#include <map_fragment>
+               // keep angel membrane readable at grazing angles
+               diffuseColor.a = max(diffuseColor.a, 0.72);
+               diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.88, 0.86, 0.82), 0.12);`
+            );
+          }
+        : null)
       : (shader) => {
           // force fully opaque body even if map samples fringe alpha
           shader.fragmentShader = shader.fragmentShader.replace(
