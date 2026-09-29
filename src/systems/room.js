@@ -211,10 +211,11 @@ export function createRoom(scene, renderer) {
     new THREE.BoxGeometry(0.86, 0.026, 0.085),
     patchRoom(new THREE.MeshStandardMaterial({ color: 0x141519, metalness: 0.85, roughness: 0.38, envMap: envTex, envMapIntensity: 0.8 }), { key: 'hous' })
   );
-  const lipMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(2.4, 2.7, 3.4), toneMapped: false });
+  // cooler, narrower core so bloom keeps a thin hard LED strip instead of a white slab
+  const lipMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.6, 1.85, 2.35), toneMapped: false });
   const lip = new THREE.Mesh(new THREE.BoxGeometry(0.82, 0.009, 0.004), lipMat);
   lip.position.set(0, -0.0035, 0.0435);
-  const emit = new THREE.Mesh(new THREE.BoxGeometry(0.82, 0.003, 0.06), new THREE.MeshBasicMaterial({ color: new THREE.Color(5, 5.4, 6.4), toneMapped: false }));
+  const emit = new THREE.Mesh(new THREE.BoxGeometry(0.82, 0.003, 0.055), new THREE.MeshBasicMaterial({ color: new THREE.Color(2.8, 3.1, 3.7), toneMapped: false }));
   emit.position.set(0, -0.0145, 0);
   fixture.add(housing, lip, emit);
   for (const sx of [-1, 1]) {
@@ -227,8 +228,8 @@ export function createRoom(scene, renderer) {
 
   // soft glow around the fixture (additive sprites)
   const glowTex = makeGlow(128);
-  const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: new THREE.Color(0.35, 0.55, 0.85), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.22, toneMapped: false }));
-  glow.scale.set(1.25, 0.24, 1);
+  const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: new THREE.Color(0.35, 0.55, 0.85), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.14, toneMapped: false }));
+  glow.scale.set(1.05, 0.18, 1);
   glow.position.set(0, 0.5, 0.0);
   group.add(glow);
 
@@ -291,7 +292,7 @@ export function createRoom(scene, renderer) {
 
   // ---- lights
   // 1) the light that lives in the water (directional, patched materials only)
-  const sun = new THREE.DirectionalLight(new THREE.Color(0.95, 0.97, 1.0), 5.0);
+  const sun = new THREE.DirectionalLight(new THREE.Color(0.95, 0.97, 1.0), 4.2);
   sun.position.set(0.0, 1.25, -0.10);
   sun.target.position.set(0, 0.1, 0);
   sun.castShadow = true;
@@ -304,9 +305,9 @@ export function createRoom(scene, renderer) {
   scene.add(sun, sun.target);
 
   // 2) room lights (point, patched-room materials only)
-  const spill = new THREE.PointLight(new THREE.Color(0.55, 0.78, 1.0), 0.20, 6, 2);
+  const spill = new THREE.PointLight(new THREE.Color(0.55, 0.78, 1.0), 0.28, 6, 2);
   spill.position.set(0, 0.62, 0.15);
-  const under = new THREE.PointLight(new THREE.Color(0.15, 0.62, 0.72), 0.18, 2.5, 2);
+  const under = new THREE.PointLight(new THREE.Color(0.18, 0.68, 0.75), 0.32, 2.8, 2);
   under.position.set(0, 0.22, 0.42);
   const lamp = new THREE.PointLight(new THREE.Color(1.0, 0.55, 0.26), 1.0, 7, 2);
   lamp.position.set(1.05, floorY + 1.3, -0.35);

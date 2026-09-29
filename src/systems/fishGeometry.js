@@ -14,7 +14,7 @@ export const SPECIES = {
     dorsal: { t0: 0.40, t1: 0.58, h: 0.13, sweep: 0.10 },
     anal: { t0: 0.52, t1: 0.72, h: 0.10, sweep: 0.08 },
     pect: { t: 0.24, len: 0.15, w: 0.05 },
-    speed: 0.075, turn: 3.2, school: 1.0, yPref: [0.10, 0.33], iri: 1.4, emissive: 0.0,
+    speed: 0.075, turn: 3.2, school: 1.0, yPref: [0.10, 0.33], iri: 0.95, emissive: 0.0,
     dispersion: 0.06,
   },
   platy: {
@@ -365,12 +365,14 @@ function scalePattern(ctx, sp, W, H, alpha, size) {
 function eye(ctx, sp, W, H, tx, ty, r, ring) {
   const L = sp.L, Ltot = L * sp.ltot;
   const x = (tx * L / Ltot) * W, y = (0.5 - (sp.dy * L + ty * L) / sp.hbox) * H;
-  const g = ctx.createRadialGradient(x, y, 0, x, y, r * 1.35);
-  g.addColorStop(0, '#050506'); g.addColorStop(0.5, '#08080a'); g.addColorStop(0.62, ring); g.addColorStop(1, 'rgba(0,0,0,0)');
-  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r * 1.35, 0, Math.PI * 2); ctx.fill();
-  // stronger catch-light
-  ctx.fillStyle = 'rgba(255,255,255,0.92)'; ctx.beginPath(); ctx.arc(x - r * 0.28, y - r * 0.32, r * 0.22, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = 'rgba(255,255,255,0.45)'; ctx.beginPath(); ctx.arc(x + r * 0.18, y + r * 0.12, r * 0.08, 0, Math.PI * 2); ctx.fill();
+  // iris ring first for contrast, then dark cornea
+  const iris = ctx.createRadialGradient(x, y, r * 0.35, x, y, r * 1.4);
+  iris.addColorStop(0, '#0a0a0c'); iris.addColorStop(0.42, '#121418'); iris.addColorStop(0.58, ring); iris.addColorStop(0.78, ring); iris.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = iris; ctx.beginPath(); ctx.arc(x, y, r * 1.4, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#030304'; ctx.beginPath(); ctx.arc(x, y, r * 0.48, 0, Math.PI * 2); ctx.fill();
+  // dome catchlights
+  ctx.fillStyle = 'rgba(255,255,255,0.95)'; ctx.beginPath(); ctx.arc(x - r * 0.30, y - r * 0.34, r * 0.26, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = 'rgba(220,235,255,0.55)'; ctx.beginPath(); ctx.arc(x + r * 0.20, y + r * 0.14, r * 0.10, 0, Math.PI * 2); ctx.fill();
 }
 
 /** Paint thin fin rays (radial lines from base) into fin regions of the shared UV atlas. */
@@ -504,16 +506,16 @@ export function paintSkin(key, sp) {
       ctx.fillStyle = rg;
       ctx.fillRect(px(0.3), py(0.005), px(0.7), H);
       ctx.fillStyle = 'rgba(20,28,22,0.55)'; ctx.fillRect(0, 0, W, py(0.045));
-      // iridescent stripe — cooler mid tones; metalness/iridescence catch the LED (no emissive)
+      // iridescent stripe — cooler, less white so bloom doesn't make light-sticks
       const sg = ctx.createLinearGradient(px(0.12), 0, px(0.95), 0);
-      sg.addColorStop(0, 'rgba(50,100,140,0.0)');
-      sg.addColorStop(0.12, 'rgba(70,140,175,0.9)');
-      sg.addColorStop(0.55, 'rgba(110,175,200,0.95)');
-      sg.addColorStop(1, 'rgba(140,200,215,0.7)');
-      ctx.strokeStyle = sg; ctx.lineWidth = H * 0.034; ctx.lineCap = 'round';
+      sg.addColorStop(0, 'rgba(40,90,130,0.0)');
+      sg.addColorStop(0.12, 'rgba(45,120,160,0.85)');
+      sg.addColorStop(0.55, 'rgba(70,150,175,0.88)');
+      sg.addColorStop(1, 'rgba(90,165,185,0.55)');
+      ctx.strokeStyle = sg; ctx.lineWidth = H * 0.032; ctx.lineCap = 'round';
       ctx.beginPath(); ctx.moveTo(px(0.10), py(0.045)); ctx.quadraticCurveTo(px(0.55), py(0.062), px(0.97), py(0.020)); ctx.stroke();
-      // bright specular edge on stripe
-      ctx.strokeStyle = 'rgba(255,255,255,0.65)'; ctx.lineWidth = H * 0.009;
+      // soft specular edge (not pure white)
+      ctx.strokeStyle = 'rgba(200,230,240,0.28)'; ctx.lineWidth = H * 0.007;
       ctx.beginPath(); ctx.moveTo(px(0.12), py(0.052)); ctx.quadraticCurveTo(px(0.55), py(0.070), px(0.95), py(0.028)); ctx.stroke();
     } else if (key === 'platy') {
       // lighter belly fade
@@ -522,11 +524,11 @@ export function paintSkin(key, sp) {
       ctx.fillStyle = bel; ctx.fillRect(0, 0, W, H);
       ctx.fillStyle = 'rgba(100,18,0,0.22)'; ctx.fillRect(0, 0, W, py(0.14));
       scalePattern(ctx, sp, W, H, 0.22, 9);
-      // micro glitter flecks
-      for (let i = 0; i < 120; i++) {
+      // micro glitter flecks (more visible sparkle)
+      for (let i = 0; i < 180; i++) {
         const gx = px(0.12 + Math.random() * 0.75), gy = py(-0.08 + Math.random() * 0.2);
-        ctx.fillStyle = `rgba(255,245,210,${0.2 + Math.random() * 0.55})`;
-        ctx.beginPath(); ctx.arc(gx, gy, 0.5 + Math.random() * 1.6, 0, 6.3); ctx.fill();
+        ctx.fillStyle = `rgba(255,248,220,${0.28 + Math.random() * 0.6})`;
+        ctx.beginPath(); ctx.arc(gx, gy, 0.6 + Math.random() * 1.8, 0, 6.3); ctx.fill();
       }
       for (let i = 0; i < 22; i++) {
         ctx.fillStyle = 'rgba(30,8,0,0.32)';
@@ -612,29 +614,29 @@ export function paintSkin(key, sp) {
     mx.fillStyle = '#0a0a0a'; mx.fillRect(0, 0, W, H);
     mx.save();
     silhouette(mx, sp, W, H, null); mx.clip();
-    mx.strokeStyle = '#f0f0f0'; mx.lineWidth = H * 0.048; mx.lineCap = 'round';
+    mx.strokeStyle = '#c8c8c8'; mx.lineWidth = H * 0.036; mx.lineCap = 'round';
     mx.beginPath(); mx.moveTo(px(0.10), py(0.045)); mx.quadraticCurveTo(px(0.55), py(0.062), px(0.97), py(0.020)); mx.stroke();
-    mx.strokeStyle = '#ffffff'; mx.lineWidth = H * 0.02;
+    mx.strokeStyle = '#e8e8e8'; mx.lineWidth = H * 0.014;
     mx.beginPath(); mx.moveTo(px(0.12), py(0.050)); mx.quadraticCurveTo(px(0.55), py(0.068), px(0.95), py(0.025)); mx.stroke();
     mx.restore();
     metalness = canvasTexture(mc, { repeat: false });
 
     const rc = makeCanvas(W, H), rx = rc.getContext('2d');
-    rx.fillStyle = '#a8a8a8'; rx.fillRect(0, 0, W, H);
+    rx.fillStyle = '#b0b0b0'; rx.fillRect(0, 0, W, H);
     rx.save();
     silhouette(rx, sp, W, H, null); rx.clip();
-    rx.strokeStyle = '#1a1a1a'; rx.lineWidth = H * 0.045; rx.lineCap = 'round';
+    rx.strokeStyle = '#3a3a3a'; rx.lineWidth = H * 0.040; rx.lineCap = 'round';
     rx.beginPath(); rx.moveTo(px(0.10), py(0.045)); rx.quadraticCurveTo(px(0.55), py(0.062), px(0.97), py(0.020)); rx.stroke();
     rx.restore();
     roughness = canvasTexture(rc, { repeat: false });
   } else if (key === 'platy') {
-    // subtle glitter metalness
+    // denser glitter metalness
     const mc = makeCanvas(W, H), mx = mc.getContext('2d');
     mx.fillStyle = '#101010'; mx.fillRect(0, 0, W, H);
     mx.save(); silhouette(mx, sp, W, H, null); mx.clip();
-    for (let i = 0; i < 110; i++) {
-      mx.fillStyle = `rgba(255,255,255,${0.25 + Math.random() * 0.6})`;
-      mx.beginPath(); mx.arc(px(0.15 + Math.random() * 0.7), py(-0.08 + Math.random() * 0.2), 0.5 + Math.random() * 1.2, 0, 6.3); mx.fill();
+    for (let i = 0; i < 160; i++) {
+      mx.fillStyle = `rgba(255,255,255,${0.35 + Math.random() * 0.65})`;
+      mx.beginPath(); mx.arc(px(0.15 + Math.random() * 0.7), py(-0.08 + Math.random() * 0.2), 0.55 + Math.random() * 1.4, 0, 6.3); mx.fill();
     }
     mx.restore();
     metalness = canvasTexture(mc, { repeat: false });

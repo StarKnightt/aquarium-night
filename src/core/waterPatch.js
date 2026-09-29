@@ -15,9 +15,9 @@ export const WU = {
   uBoxMin: { value: new THREE.Vector3(-TANK.iw, TANK.waterMinY, -TANK.id) },
   uBoxMax: { value: new THREE.Vector3(TANK.iw, TANK.surfaceY, TANK.id) },
   uAbsorb: { value: new THREE.Vector3(0.55, 0.24, 0.20) },   // 1/m, red dies first
-  uScatter: { value: new THREE.Color(0.012, 0.030, 0.038) }, // in-scatter glow of lit water
-  uAmbient: { value: new THREE.Color(0.085, 0.120, 0.135) },
-  uCaustGain: { value: 1.0 },
+  uScatter: { value: new THREE.Color(0.018, 0.042, 0.050) }, // soft cyan-green tank fill
+  uAmbient: { value: new THREE.Color(0.11, 0.15, 0.165) },
+  uCaustGain: { value: 0.72 },
   uDbg: { value: 0 },
   uRoomAmbient: { value: new THREE.Color(0.010, 0.012, 0.016) },
 };
@@ -40,11 +40,11 @@ vec3 causticAt(vec3 p) { return causticAt(p, 0.0); }
 vec3 causticAt(vec3 p, float soft) {
   float depth = clamp(uBoxMax.y - p.y, 0.0, 0.6);
   vec2 uv = p.xz * 2.0 + vec2(0.13, 0.31);
-  float lod = clamp(1.2 - depth * 3.0, 0.0, 1.8) + 0.30 + soft;
+  float lod = clamp(1.2 - depth * 3.0, 0.0, 1.8) + 0.55 + soft;
   vec3 c = textureLod(uCaust, uv, lod).rgb;
-  vec3 c2 = textureLod(uCaust, uv * 0.43 + vec2(0.47, 0.19) + depth * 0.05, lod + 1.5).rgb;
-  vec3 cc = vec3(0.24) + (c * 0.92 + c2 * 0.10) * 1.45 * uCaustGain;
-  cc = cc / (1.0 + cc * 0.10);
+  vec3 c2 = textureLod(uCaust, uv * 0.43 + vec2(0.47, 0.19) + depth * 0.05, lod + 1.8).rgb;
+  vec3 cc = vec3(0.30) + (c * 0.78 + c2 * 0.18) * 1.05 * uCaustGain;
+  cc = cc / (1.0 + cc * 0.22);
   // desaturate the dispersion fringe a little
   float ccl = dot(cc, vec3(0.333));
   cc = mix(vec3(ccl), cc, 0.45);

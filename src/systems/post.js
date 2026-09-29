@@ -47,7 +47,8 @@ export function createPost(renderer, scene, camera) {
   const rt = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: Q.msaa });
   const composer = new EffectComposer(renderer, rt);
   composer.addPass(new RenderPass(scene, camera));
-  const bloom = new UnrealBloomPass(new THREE.Vector2(size.x * Q.bloomScale, size.y * Q.bloomScale), 0.32, 0.38, 1.15);
+  // strength / radius / threshold — higher threshold keeps LED core, cuts neon stripe bloom
+  const bloom = new UnrealBloomPass(new THREE.Vector2(size.x * Q.bloomScale, size.y * Q.bloomScale), 0.22, 0.32, 1.38);
   composer.addPass(bloom);
   composer.addPass(new OutputPass());
   const photo = new ShaderPass(PhotoShader);

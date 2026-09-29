@@ -33,7 +33,7 @@ function createCaustics(renderer) {
     do { ix = Math.round((rnd() * 2 - 1) * 12); iy = Math.round((rnd() * 2 - 1) * 12); } while ((ix === 0 && iy === 0) || ix * ix + iy * iy > 150 || ix * ix + iy * iy < 6);
     const m = Math.hypot(ix, iy);
     K.push(new THREE.Vector2(ix, iy));
-    C.push((0.30 + rnd() * 0.26) * (1.0 + 2.6 / m));   // focusing strength
+    C.push((0.22 + rnd() * 0.18) * (1.0 + 2.0 / m));   // softer focusing (less hard mesh)
     Wv.push(0.55 * Math.sqrt(m) * (0.6 + rnd() * 0.8)); // angular speed
     Ph.push(rnd() * 6.283);
   }
@@ -61,11 +61,11 @@ function createCaustics(renderer) {
         for (int ch = 0; ch < 3; ch++) {
           float d = 1.0 + 0.025 * float(ch);            // slight dispersion per channel
           float det = (1.0 + d * hxx) * (1.0 + d * hyy) - d * d * hxy * hxy;
-          float I = 1.0 / (abs(det) + 0.028);
+          float I = 1.0 / (abs(det) + 0.045);
           out3[ch] = I;
         }
-        out3 = pow(out3 * 0.07, vec3(2.1));
-        out3 = out3 / (1.0 + out3 * 0.07);
+        out3 = pow(out3 * 0.055, vec3(1.85));
+        out3 = out3 / (1.0 + out3 * 0.14);
         gl_FragColor = vec4(out3, 1.0);
       }`,
   });
@@ -149,7 +149,7 @@ function createSurface() {
           vec3 hit = vW + R * tt;
           float bx = abs(hit.x) / 0.41, bz = abs(hit.z + 0.06) / 0.03;
           float bar = smoothstep(1.06, 0.9, bx) * smoothstep(1.25, 0.25, bz) * step(0.0, R.y);
-          env += vec3(0.95, 1.0, 1.2) * 4.0 * bar;
+          env += vec3(0.85, 0.95, 1.15) * 2.4 * bar;
           // meniscus & darkening toward the deep back, teal sheen of the water itself
           col = env * F + vec3(0.004, 0.02, 0.028) * (1.0 - F) * 0.6;
           a = clamp(F + 0.04, 0.0, 1.0);
