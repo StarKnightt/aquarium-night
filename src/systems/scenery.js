@@ -263,8 +263,8 @@ function bladeMaterials() {
           `#include <emissivemap_fragment>
            { float dpt = max(uBoxMax.y - vWPos.y, 0.0);
              vec3 tl = diffuseColor.rgb * vec3(1.25, 1.2, 0.5) * causticAt(vWPos) * exp(-dpt * 1.15);
-             float thin = 0.7 + 0.55 * (1.0 - abs(vU - 0.5) * 2.0);
-             totalEmissiveRadiance += tl * thin * (0.65 + 0.7 * smoothstep(0.08, 1.0, vT)) * 0.72; }`
+             float thin = 0.85 + 0.75 * (1.0 - abs(vU - 0.5) * 2.0);
+             totalEmissiveRadiance += tl * thin * (0.85 + 0.9 * smoothstep(0.08, 1.0, vT)) * 1.05; }`
         );
       },
     }

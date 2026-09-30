@@ -387,27 +387,32 @@ function paintFinRays(ctx, sp, W, H, key, px, py) {
   const rayCol = {
     neon: 'rgba(220,235,240,0.55)',
     platy: 'rgba(255,200,140,0.5)',
-    angel: 'rgba(40,40,48,0.7)',
+    angel: 'rgba(55,55,62,0.28)',
     cory: 'rgba(255,230,190,0.45)',
   }[key];
   const rayDark = {
     neon: 'rgba(20,30,35,0.5)',
     platy: 'rgba(60,15,5,0.55)',
-    angel: 'rgba(15,15,20,0.65)',
+    angel: 'rgba(20,20,26,0.32)',
     cory: 'rgba(40,28,15,0.5)',
   }[key];
   ctx.save();
   ctx.lineCap = 'round';
+  const isAngel = key === 'angel';
+  const nCaudal = isAngel ? 9 : 13;
+  const nDorsal = isAngel ? 7 : 10;
+  const nAnal = isAngel ? 6 : 9;
 
-  // caudal rays from peduncle → tip (dark + light pair for readability)
+  // caudal rays from peduncle → tip
   const cx = bodyEnd * 0.98;
   const cy = H * 0.5;
-  for (let i = 0; i < 13; i++) {
-    const a = -1.05 + (i / 12) * 2.1;
+  for (let i = 0; i < nCaudal; i++) {
+    const a = -1.05 + (i / Math.max(1, nCaudal - 1)) * 2.1;
     const tipX = bodyEnd + (W - bodyEnd) * 0.92;
-    for (const [col, w, ox] of [[rayDark, 2.0, 0], [rayCol, 1.0, 0.5]]) {
+    const pairs = isAngel ? [[rayDark, 1.4, 0]] : [[rayDark, 2.0, 0], [rayCol, 1.0, 0.5]];
+    for (const [col, w, ox] of pairs) {
       ctx.strokeStyle = col;
-      ctx.globalAlpha = 0.55 + 0.4 * Math.sin((i / 12) * Math.PI);
+      ctx.globalAlpha = (isAngel ? 0.35 : 0.55) + 0.35 * Math.sin((i / Math.max(1, nCaudal - 1)) * Math.PI);
       ctx.lineWidth = w;
       ctx.beginPath();
       ctx.moveTo(cx, cy + Math.sin(a) * H * 0.05);
@@ -422,35 +427,35 @@ function paintFinRays(ctx, sp, W, H, key, px, py) {
   // dorsal rays
   const d = sp.dorsal;
   const d0 = px(d.t0), d1 = px(d.t1);
-  for (let i = 0; i < 10; i++) {
-    const t = i / 9;
+  for (let i = 0; i < nDorsal; i++) {
+    const t = i / Math.max(1, nDorsal - 1);
     const x0 = d0 + (d1 - d0) * t;
-    ctx.strokeStyle = rayDark; ctx.globalAlpha = 0.6; ctx.lineWidth = 1.6;
+    ctx.strokeStyle = rayDark; ctx.globalAlpha = isAngel ? 0.32 : 0.6; ctx.lineWidth = isAngel ? 1.1 : 1.6;
     ctx.beginPath();
     ctx.moveTo(x0, py(prof(sp.hy, d.t0 + (d.t1 - d.t0) * t) * 0.95));
     ctx.lineTo(x0 - d.sweep * (L / Ltot) * W * 0.55 * (0.3 + 0.7 * t), 2 + t * 10);
     ctx.stroke();
-    ctx.strokeStyle = rayCol; ctx.lineWidth = 0.8; ctx.stroke();
+    if (!isAngel) { ctx.strokeStyle = rayCol; ctx.lineWidth = 0.8; ctx.stroke(); }
   }
   // anal rays
   const an = sp.anal;
   const a0 = px(an.t0), a1 = px(an.t1);
-  for (let i = 0; i < 9; i++) {
-    const t = i / 8;
+  for (let i = 0; i < nAnal; i++) {
+    const t = i / Math.max(1, nAnal - 1);
     const x0 = a0 + (a1 - a0) * t;
-    ctx.strokeStyle = rayDark; ctx.globalAlpha = 0.55; ctx.lineWidth = 1.5;
+    ctx.strokeStyle = rayDark; ctx.globalAlpha = isAngel ? 0.28 : 0.55; ctx.lineWidth = isAngel ? 1.0 : 1.5;
     ctx.beginPath();
     ctx.moveTo(x0, py(-prof(sp.hy, an.t0 + (an.t1 - an.t0) * t) * sp.belly * 0.95));
     ctx.lineTo(x0 - an.sweep * (L / Ltot) * W * 0.5 * (0.3 + 0.7 * t), H - 2 - t * 8);
     ctx.stroke();
-    ctx.strokeStyle = rayCol; ctx.lineWidth = 0.8; ctx.stroke();
+    if (!isAngel) { ctx.strokeStyle = rayCol; ctx.lineWidth = 0.8; ctx.stroke(); }
   }
   // pectoral suggestion (mid flanks)
   const p = sp.pect;
   for (const side of [-1, 1]) {
     for (let i = 0; i < 5; i++) {
       const t = i / 4;
-      ctx.strokeStyle = rayDark; ctx.globalAlpha = 0.45; ctx.lineWidth = 1.1;
+      ctx.strokeStyle = rayDark; ctx.globalAlpha = isAngel ? 0.25 : 0.45; ctx.lineWidth = 1.1;
       const y0 = py(-prof(sp.hy, p.t) * 0.25);
       ctx.beginPath();
       ctx.moveTo(px(p.t), y0 + side * 2);
@@ -585,16 +590,12 @@ export function paintSkin(key, sp) {
     tg.addColorStop(0, 'rgba(255,120,55,0)'); tg.addColorStop(0.55, 'rgba(160,40,15,0)'); tg.addColorStop(1, 'rgba(20,6,5,0.55)');
     fctx.fillStyle = tg; fctx.fillRect(px(1.0), 0, W - px(1.0), H);
   } else if (key === 'angel') {
+    // soft membrane wash only — avoid second hard ray grid on top of paintFinRays
     fctx.save(); fctx.globalCompositeOperation = 'source-atop';
-    for (let i = 0; i < 7; i++) {
-      fctx.strokeStyle = 'rgba(25,25,30,0.40)'; fctx.lineWidth = 2.2;
-      fctx.beginPath(); fctx.moveTo(px(0.5 + i * 0.08), 0); fctx.lineTo(px(0.35 + i * 0.1), H * 0.36); fctx.stroke();
-      fctx.beginPath(); fctx.moveTo(px(0.55 + i * 0.07), H); fctx.lineTo(px(0.4 + i * 0.09), H * 0.66); fctx.stroke();
-    }
-    fctx.restore();
     const cg = fctx.createLinearGradient(px(1.0), 0, px(1.34), 0);
-    cg.addColorStop(0, 'rgba(240,160,70,0.0)'); cg.addColorStop(1, 'rgba(240,150,60,0.30)');
+    cg.addColorStop(0, 'rgba(240,160,70,0.0)'); cg.addColorStop(1, 'rgba(240,150,60,0.28)');
     fctx.fillStyle = cg; fctx.fillRect(px(1.0), 0, W - px(1.0), H);
+    fctx.restore();
   }
   // soften outer membrane: reduce alpha toward canvas edges for fin tips
   fctx.globalCompositeOperation = 'destination-in';

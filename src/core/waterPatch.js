@@ -19,7 +19,7 @@ export const WU = {
   uRoomAmbient: { value: new THREE.Color(0.012, 0.014, 0.018) },
   uAbsorb: { value: new THREE.Vector3(0.52, 0.23, 0.19) },
   uScatter: { value: new THREE.Color(0.020, 0.045, 0.052) },
-  uAmbient: { value: new THREE.Color(0.115, 0.155, 0.170) },
+  uAmbient: { value: new THREE.Color(0.16, 0.20, 0.215) },
 };
 
 const waterGLSL = /* glsl */ `

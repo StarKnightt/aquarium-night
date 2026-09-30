@@ -330,7 +330,7 @@ export function createRoom(scene, renderer) {
 
   // ---- lights
   // 1) LED as soft area key (directional + large PCF radius for penumbra)
-  const sun = new THREE.DirectionalLight(new THREE.Color(0.92, 0.96, 1.0), 3.6);
+  const sun = new THREE.DirectionalLight(new THREE.Color(0.92, 0.96, 1.0), 2.8);
   sun.position.set(0.0, 1.25, -0.10);
   sun.target.position.set(0, 0.1, 0);
   sun.castShadow = true;
