@@ -5,6 +5,11 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { Q } from '../core/quality.js';
+import { TANK } from '../core/waterPatch.js';
+
+const TANK_HALF_W = TANK.halfW;
+const TANK_H = TANK.height;
+const TANK_FRONT_Z = TANK.halfD;
 
 // Mild depth-of-field from a dedicated non-MSAA depth prepass (MSAA RTs break depth sampling).
 const DoFShader = {
@@ -70,9 +75,10 @@ const PhotoShader = {
     uHalo: { value: 0.22 },
     uWarm: { value: 0.035 },
     uTexel: { value: new THREE.Vector2(1 / 1600, 1 / 900) },
-    // tank AABB in UV (xy = min, zw = max); refraction magnifies inside
+    // front-glass UV AABB (xy=min, zw=max). Refraction is OFF by default — a loose 3D-box
+    // AABB previously covered room pixels and made walls/stand swim like liquid.
     uTankUV: { value: new THREE.Vector4(0.25, 0.2, 0.75, 0.75) },
-    uRefract: { value: Q.name === 'high' ? 1.0 : 0.0 },
+    uRefract: { value: 0.0 },
   },
   vertexShader: /* glsl */ `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
   fragmentShader: /* glsl */ `
@@ -82,36 +88,39 @@ const PhotoShader = {
     uniform vec4 uTankUV;
     varying vec2 vUv;
     float hash(vec2 p){ vec3 p3 = fract(vec3(p.xyx) * .1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
+    // Hard tank membership from front-glass UV rect (inset). No soft exterior falloff —
+    // room pixels must sample identity UVs so the room stays rigid.
+    float tankMask(vec2 uv) {
+      vec2 tmin = uTankUV.xy, tmax = uTankUV.zw;
+      vec2 tc = (tmin + tmax) * 0.5;
+      vec2 th = (tmax - tmin) * 0.5 * 0.92; // inset so we never touch room
+      vec2 local = abs(uv - tc) / max(th, vec2(1e-4));
+      return float(local.x < 1.0 && local.y < 1.0);
+    }
     void main(){
       vec2 d = vUv - 0.5;
       float r2 = dot(d * vec2(uAspect, 1.0), d * vec2(uAspect, 1.0));
+      // Static barrel only — never time-varying. Applied to whole frame (symmetric, rigid).
       vec2 uv = 0.5 + d * (1.0 + uBarrel * r2);
-      // cheap n≈1.33 magnification inside the tank screen rect + edge kink
-      if (uRefract > 0.5) {
+      float inside = tankMask(uv);
+      // Optional n≈1.33 magnification STRICTLY inside the inset front-glass rect.
+      if (uRefract > 0.5 && inside > 0.5) {
         vec2 tmin = uTankUV.xy, tmax = uTankUV.zw;
         vec2 tc = (tmin + tmax) * 0.5;
         vec2 th = (tmax - tmin) * 0.5;
         vec2 local = (uv - tc) / max(th, vec2(1e-4));
-        float inside = float(abs(local.x) < 1.0 && abs(local.y) < 1.0);
         float edge = 1.0 - max(abs(local.x), abs(local.y));
-        // noticeable n≈1.33 magnification; stronger near vertical glass edges
-        float mag = 0.945 + 0.035 * smoothstep(0.0, 0.22, edge);
-        vec2 refr = tc + (uv - tc) * mix(1.0, mag, inside);
-        float side = smoothstep(0.18, 0.0, abs(abs(local.x) - 1.0)) * inside;
-        refr.x += local.x * side * 0.028;
-        refr.y += side * local.y * 0.006;
-        // waterline kink
-        float wl = smoothstep(0.09, 0.0, abs(local.y - 0.70)) * inside;
-        refr.y -= wl * 0.014;
-        refr.x += wl * local.x * 0.006;
-        uv = mix(uv, refr, uRefract);
+        float mag = 0.955 + 0.025 * smoothstep(0.0, 0.25, edge);
+        uv = tc + (uv - tc) * mag;
       }
+      // Mild static CA (whole frame — not time-varying, keeps room rigid)
       vec2 off = d * r2 * uCA * 7.0;
       vec3 c;
       c.r = texture2D(tDiffuse, uv + off).r;
       c.g = texture2D(tDiffuse, uv).g;
       c.b = texture2D(tDiffuse, uv - off).b;
-      if (uSoft > 0.01) {
+      // Soft bloom-blur ONLY inside the tank — otherwise moving fish bleed into the room.
+      if (uSoft > 0.01 && inside > 0.5) {
         vec2 t = uTexel * uSoft;
         vec3 blur = c * 0.5
           + texture2D(tDiffuse, uv + vec2(t.x, 0.0)).rgb * 0.125
@@ -128,6 +137,7 @@ const PhotoShader = {
       c = (c - 0.5) * 1.06 + 0.5;
       float vig = 1.0 - uVig * smoothstep(0.25, 1.2, r2 * 2.0);
       c *= vig;
+      // Film grain is the ONLY intentional time-varying room signal
       float n1 = hash(floor(gl_FragCoord.xy) + fract(uTime * 0.97) * 113.0);
       float n2 = hash(floor(gl_FragCoord.xy * 0.5) - fract(uTime * 1.31) * 71.0);
       float n = (n1 + n2) * 0.5 - 0.5;
@@ -195,13 +205,13 @@ export function createPost(renderer, scene, camera) {
 
   const focusPoint = new THREE.Vector3(0, 0.2, 0);
   const _ndc = new THREE.Vector3();
+  // Front glass face only — full 3D box AABB was far larger than the tank silhouette
+  // and pulled room pixels into the refraction/soft masks.
   const tankCorners = [
-    new THREE.Vector3(-0.5, 0.0, 0.21),
-    new THREE.Vector3(0.5, 0.0, 0.21),
-    new THREE.Vector3(-0.5, 0.45, 0.21),
-    new THREE.Vector3(0.5, 0.45, 0.21),
-    new THREE.Vector3(-0.5, 0.0, -0.21),
-    new THREE.Vector3(0.5, 0.45, -0.21),
+    new THREE.Vector3(-TANK_HALF_W, 0.0, TANK_FRONT_Z),
+    new THREE.Vector3(TANK_HALF_W, 0.0, TANK_FRONT_Z),
+    new THREE.Vector3(-TANK_HALF_W, TANK_H, TANK_FRONT_Z),
+    new THREE.Vector3(TANK_HALF_W, TANK_H, TANK_FRONT_Z),
   ];
 
   return {

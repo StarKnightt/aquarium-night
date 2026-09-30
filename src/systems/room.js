@@ -401,7 +401,7 @@ export function createRoom(scene, renderer) {
             float m = pow(clamp(c * 0.6 + c2 * 0.4, 0.0, 2.5), 2.2);
             float fall = smoothstep(0.0, 0.25, vUv.y) * smoothstep(1.0, 0.55, vUv.y)
                        * smoothstep(0.0, 0.18, vUv.x) * smoothstep(1.0, 0.82, vUv.x);
-            gl_FragColor = vec4(vec3(0.35, 0.65, 0.95) * m * fall * 0.14, 1.0);
+            gl_FragColor = vec4(vec3(0.35, 0.65, 0.95) * m * fall * 0.08, 1.0);
           }`,
       })
     );

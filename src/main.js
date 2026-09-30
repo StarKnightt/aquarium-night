@@ -214,11 +214,11 @@ if (!isCine) {
   if (el) { el.style.display = 'none'; el.style.opacity = '0'; }
 }
 
-// ---- adaptive resolution scaler (keeps phones smooth; never below 0.6) — off in cine
+// ---- adaptive resolution scaler (keeps phones smooth; never below 0.6) — off in cine/shot
 window.__aqScale = window.__aqScale || 1;
 let _ftSum = 0, _ftN = 0, _ftLast = performance.now(), _scaleCool = 0;
 function adaptScale(now) {
-  if (isCine || window.__cineNoAdapt) return;
+  if (isCine || isDebug || window.__cineNoAdapt) return;
   const ft = now - _ftLast;
   _ftLast = now;
   if (ft <= 0 || ft > 120) return;
@@ -328,8 +328,9 @@ if (isDebug && !isCine) {
 
 // ---- debug/screenshot API (used by the critic harness; harmless in production)
 window.__aqU = WU;
+window.__aqPost = post;
 window.__aq = {
-  ready: true, scene, camera, controls, renderer, sys, events, explore,
+  ready: true, scene, camera, controls, renderer, sys, events, explore, post,
   defaultCam: { pos: camera.position.toArray(), look: target.toArray() },
   applyOrbitLimits,
   setExplore(on) {
