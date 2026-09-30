@@ -1,26 +1,28 @@
 import * as THREE from 'three';
 import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
+import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
 import { TANK, WU, patchWater } from '../core/waterPatch.js';
 import { fbm2, fbm3, noise2, mulberry32 } from '../core/noise.js';
 import { makeSand } from '../core/textures.js';
 import { Q } from '../core/quality.js';
 
-// x, z, sx, sy, sz, tone(rgb), yaw, tilt   — one dominant stone, uneven mass, scattered pebbles
+// Iwagumi-ish triangle: main (oyaishi) + secondary (fukuishi) + tertiary + pebbles
+// x, z, sx, sy, sz, tone(rgb), yaw, tilt
 const ROCKS = [
-  [-0.17, -0.04, 0.185, 0.118, 0.128, [0.29, 0.25, 0.20], 0.5, 0.10],   // dominant, warm grey-brown
-  [-0.345, -0.085, 0.100, 0.068, 0.084, [0.33, 0.27, 0.20], 2.1, -0.15], // warm tan
-  [-0.075, 0.045, 0.058, 0.038, 0.048, [0.23, 0.235, 0.19], 1.0, 0.1],   // olive
-  [0.31, -0.06, 0.088, 0.060, 0.075, [0.19, 0.19, 0.18], 4.0, 0.05],    // grey
-  [0.415, 0.02, 0.048, 0.034, 0.042, [0.31, 0.25, 0.19], 0.3, 0.2],
-  [0.21, 0.10, 0.040, 0.026, 0.034, [0.26, 0.24, 0.21], 2.5, 0],
-  [-0.43, 0.11, 0.036, 0.024, 0.030, [0.20, 0.21, 0.18], 1.4, 0],
-  [0.06, 0.155, 0.022, 0.015, 0.019, [0.32, 0.28, 0.22], 0.7, 0],
-  [0.37, 0.12, 0.030, 0.019, 0.026, [0.22, 0.21, 0.19], 5.2, 0],
-  [-0.01, 0.10, 0.020, 0.013, 0.017, [0.28, 0.26, 0.21], 3.3, 0],
-  [-0.26, 0.09, 0.017, 0.011, 0.014, [0.3, 0.27, 0.2], 2.0, 0],
-  [0.13, 0.17, 0.014, 0.009, 0.012, [0.24, 0.23, 0.2], 4.4, 0],
-  [0.47, 0.11, 0.018, 0.012, 0.015, [0.27, 0.26, 0.22], 1.1, 0],
-  [-0.30, 0.17, 0.013, 0.009, 0.011, [0.22, 0.21, 0.2], 3.9, 0],
+  [-0.14, -0.03, 0.195, 0.132, 0.118, [0.30, 0.26, 0.21], 0.55, 0.12],  // main
+  [-0.34, -0.09, 0.108, 0.078, 0.090, [0.34, 0.28, 0.21], 2.2, -0.18], // secondary
+  [0.28, -0.05, 0.095, 0.068, 0.080, [0.20, 0.20, 0.185], 4.1, 0.08],  // tertiary
+  [-0.06, 0.05, 0.052, 0.036, 0.044, [0.24, 0.235, 0.19], 1.1, 0.12],
+  [0.40, 0.01, 0.046, 0.032, 0.040, [0.31, 0.25, 0.19], 0.4, 0.18],
+  [0.18, 0.09, 0.038, 0.024, 0.032, [0.26, 0.24, 0.21], 2.6, 0.05],
+  [-0.42, 0.10, 0.034, 0.022, 0.028, [0.20, 0.21, 0.18], 1.5, 0],
+  [0.05, 0.15, 0.022, 0.014, 0.018, [0.32, 0.28, 0.22], 0.8, 0],
+  [0.36, 0.11, 0.028, 0.018, 0.024, [0.22, 0.21, 0.19], 5.1, 0],
+  [-0.02, 0.09, 0.018, 0.012, 0.015, [0.28, 0.26, 0.21], 3.2, 0],
+  [-0.25, 0.08, 0.016, 0.010, 0.013, [0.3, 0.27, 0.2], 2.1, 0],
+  [0.12, 0.16, 0.014, 0.009, 0.011, [0.24, 0.23, 0.2], 4.3, 0],
+  [0.46, 0.10, 0.017, 0.011, 0.014, [0.27, 0.26, 0.22], 1.0, 0],
+  [-0.29, 0.16, 0.012, 0.008, 0.010, [0.22, 0.21, 0.2], 3.8, 0],
 ];
 
 function sandBase(x, z) {
@@ -48,73 +50,114 @@ export function sandHeight(x, z) {
     const rn = Math.sqrt(dx * dx + dz * dz);
     if (rn < 2.15) {
       const t = Math.min(1, Math.max(0, (2.15 - rn) / 1.2));
-      h += r[3] * 0.62 * t * t * (3 - 2 * t) * (0.85 + 0.3 * noise2(x * 40 + i, z * 40));
+      h += r[3] * 0.72 * t * t * (3 - 2 * t) * (0.85 + 0.3 * noise2(x * 40 + i, z * 40));
     }
   }
   return h;
 }
 
 // ------------------------------------------------------------------------------------------------
-// Rocks: smooth river stones (noise-displaced spheres, vertex-coloured with veining and dusty tops)
+// Rocks: angular river / dragon-stone style — convex hull of jittered points, chamfered edges,
+// strata cracks, conchoidal chips, vertex-coloured pores/veins/moss/algae.
 // ------------------------------------------------------------------------------------------------
 function makeRock(seed, sx, sy, sz, seg, tone) {
-  let g = new THREE.SphereGeometry(1, seg[0], seg[1]);
-  g.deleteAttribute('normal'); g.deleteAttribute('uv');
-  g = mergeVertices(g, 1e-4);
-  const p = g.attributes.position;
-  const col = new Float32Array(p.count * 3);
-  const v = new THREE.Vector3();
-  const s = seed * 7.31;
-  // pick 3–5 facet plane normals for irregular chamfered faces
-  const facets = [];
   const rnd = mulberry32(seed * 91 + 3);
-  const nF = 3 + (rnd() * 3) | 0;
-  for (let f = 0; f < nF; f++) {
-    const a = rnd() * 6.28, b = (rnd() - 0.35) * 1.6;
-    facets.push([
-      Math.cos(a) * Math.cos(b),
-      Math.sin(b),
-      Math.sin(a) * Math.cos(b),
-      0.55 + rnd() * 0.35, // plane offset
-      0.04 + rnd() * 0.08, // chamfer soft width
-    ]);
+  const s = seed * 7.31;
+  const nPts = Math.max(18, Math.round(14 + seg[0] * 1.4));
+  const pts = [];
+  // axis-aligned box corners + edge midpoints (hard silhouette)
+  for (const x of [-1, 0, 1]) for (const y of [-1, 0, 1]) for (const z of [-1, 0, 1]) {
+    if (x === 0 && y === 0 && z === 0) continue;
+    const jx = (rnd() - 0.5) * 0.35, jy = (rnd() - 0.5) * 0.28, jz = (rnd() - 0.5) * 0.35;
+    pts.push(new THREE.Vector3(
+      (x * 0.72 + jx) * (0.85 + rnd() * 0.25),
+      (y * 0.62 + jy) * (0.80 + rnd() * 0.30),
+      (z * 0.72 + jz) * (0.85 + rnd() * 0.25),
+    ));
   }
+  // extra random hull points on ellipsoid (fills convex volume)
+  for (let i = 0; i < nPts; i++) {
+    const a = rnd() * Math.PI * 2;
+    const b = Math.acos(2 * rnd() - 1);
+    let x = Math.sin(b) * Math.cos(a);
+    let y = Math.cos(b);
+    let z = Math.sin(b) * Math.sin(a);
+    // squash + angular push toward octahedral directions
+    const ax = Math.abs(x), ay = Math.abs(y), az = Math.abs(z);
+    const oct = Math.pow(ax + ay + az, -0.55);
+    const r = (0.55 + rnd() * 0.55) * oct;
+    x *= r; y *= r * (0.78 + rnd() * 0.35); z *= r;
+    // dragon-stone vertical ridges
+    x += Math.sign(x || 1) * Math.pow(Math.abs(x), 0.7) * 0.12 * (rnd() - 0.2);
+    pts.push(new THREE.Vector3(x, y, z));
+  }
+  // conchoidal chip voids: pull a few points inward near a random face
+  for (let c = 0; c < 2 + (rnd() * 2) | 0; c++) {
+    const cx = (rnd() - 0.5) * 1.4, cy = (rnd() - 0.3) * 1.2, cz = (rnd() - 0.5) * 1.4;
+    pts.push(new THREE.Vector3(cx * 0.45, cy * 0.4, cz * 0.45));
+  }
+
+  let g = new ConvexGeometry(pts);
+  g.deleteAttribute('normal');
+  g = mergeVertices(g, 1e-4);
+
+  // slight edge chamfer: push vertices toward face-centroid average (one laplacian soften)
+  const p = g.attributes.position;
+  const idx = g.index;
+  const adj = Array.from({ length: p.count }, () => []);
+  for (let t = 0; t < idx.count; t += 3) {
+    const a = idx.getX(t), b = idx.getX(t + 1), c = idx.getX(t + 2);
+    adj[a].push(b, c); adj[b].push(a, c); adj[c].push(a, b);
+  }
+  const soft = new Float32Array(p.count * 3);
+  const v = new THREE.Vector3(), acc = new THREE.Vector3();
   for (let i = 0; i < p.count; i++) {
-    v.fromBufferAttribute(p, i).normalize();
-    const n = fbm3(v.x * 1.25 + s, v.y * 1.25 + s * 0.5, v.z * 1.25 - s, 4) * 0.28
-            + fbm3(v.x * 4.0 + s, v.y * 4.0, v.z * 4.0 - s, 3) * 0.085
-            + fbm3(v.x * 14 + s, v.y * 14, v.z * 14, 2) * 0.028
-            + fbm3(v.x * 40 + s, v.y * 40, v.z * 40, 2) * 0.012;
-    const strata = Math.sin((v.y * 4.0 + fbm3(v.x + s, v.z, 0, 2) * 0.5) * 11.0) * 0.018;
-    // harder chip facets + plane cuts
-    let r = 1 + n + strata;
-    for (const [fx, fy, fz, off, soft] of facets) {
-      const d = v.x * fx + v.y * fy + v.z * fz - off;
-      if (d > -soft) {
-        const cut = Math.min(1, Math.max(0, (d + soft) / (soft * 2.2)));
-        r *= 1.0 - cut * 0.22;
-      }
+    v.fromBufferAttribute(p, i);
+    acc.set(0, 0, 0);
+    const nbs = adj[i];
+    for (let k = 0; k < nbs.length; k++) {
+      acc.x += p.getX(nbs[k]); acc.y += p.getY(nbs[k]); acc.z += p.getZ(nbs[k]);
     }
-    const chip = Math.max(0, fbm3(v.x * 2.5 - s, v.y * 2.5, v.z * 2.5 + s, 2) - 0.48) * 0.09;
-    r -= chip;
-    let yy = v.y;
-    if (yy < 0) yy *= 0.78;
-    p.setXYZ(i, v.x * r * sx, yy * r * sy, v.z * r * sz);
-    const m = 0.68 + 0.58 * (fbm3(v.x * 3.2 + s, v.y * 3.2, v.z * 3.2, 3) * 0.5 + 0.5);
-    const vein = Math.pow(Math.max(0, 1 - Math.abs(Math.sin((v.x * 2.4 + v.y * 1.5 + fbm3(v.x * 2 + s, v.y * 2, v.z * 2, 2) * 2.4) * 9.0)) * 3.4), 2.0);
-    const pore = Math.pow(Math.max(0, fbm3(v.x * 22 + s, v.y * 22, v.z * 22, 2) - 0.38), 1.4);
-    const film = Math.max(0, fbm3(v.x * 2.4 - s, v.y * 2.4, v.z * 2.4 + s, 3) + 0.08) * (0.4 + 0.6 * Math.max(0, v.y + 0.2));
-    const moss = Math.pow(Math.max(0, fbm3(v.x * 6 - s, v.y * 5, v.z * 6, 3) - 0.35), 1.6) * Math.max(0, 0.55 - Math.abs(v.y));
-    const stain = Math.exp(-Math.pow((v.y - 0.12) * 4.0, 2.0)) * 0.14;
-    let rr = tone[0] * m + vein * 0.14 - pore * 0.12;
-    let gg = tone[1] * m + vein * 0.11 - pore * 0.07;
-    let bb = tone[2] * m + vein * 0.09 - pore * 0.05;
-    rr = rr * (1 - film * 0.5) + film * 0.04 - stain * 0.05 + moss * 0.02;
-    gg = gg * (1 - film * 0.2) + film * 0.11 + stain * 0.02 + moss * 0.08;
-    bb = bb * (1 - film * 0.65) + film * 0.016 - stain * 0.03 + moss * 0.03;
+    const inv = 1 / Math.max(1, nbs.length);
+    soft[i * 3] = v.x * 0.82 + acc.x * inv * 0.18;
+    soft[i * 3 + 1] = v.y * 0.82 + acc.y * inv * 0.18;
+    soft[i * 3 + 2] = v.z * 0.82 + acc.z * inv * 0.18;
+  }
+  for (let i = 0; i < p.count; i++) p.setXYZ(i, soft[i * 3], soft[i * 3 + 1], soft[i * 3 + 2]);
+
+  // strata cracks + scale to sx/sy/sz + vertex colours
+  const col = new Float32Array(p.count * 3);
+  for (let i = 0; i < p.count; i++) {
+    v.fromBufferAttribute(p, i);
+    const nrm = v.clone().normalize();
+    // thin strata recess bands
+    const band = Math.sin((v.y * 5.2 + fbm3(v.x + s, v.z, 0, 2) * 0.6) * 14.0);
+    const crack = Math.pow(Math.max(0, 1 - Math.abs(band) * 4.2), 2.5);
+    v.x *= 1 - crack * 0.04;
+    v.y *= 1 - crack * 0.055;
+    v.z *= 1 - crack * 0.04;
+    // flatten underside slightly so stone sits into banked sand
+    if (v.y < -0.15) v.y *= 0.72;
+    p.setXYZ(i, v.x * sx, v.y * sy, v.z * sz);
+
+    const m = 0.62 + 0.62 * (fbm3(nrm.x * 3.2 + s, nrm.y * 3.2, nrm.z * 3.2, 3) * 0.5 + 0.5);
+    const vein = Math.pow(Math.max(0, 1 - Math.abs(Math.sin((nrm.x * 2.6 + nrm.y * 1.4 + fbm3(nrm.x * 2 + s, nrm.y * 2, nrm.z * 2, 2) * 2.2) * 10.0)) * 3.5), 2.0);
+    const pore = Math.pow(Math.max(0, fbm3(nrm.x * 26 + s, nrm.y * 26, nrm.z * 26, 2) - 0.36), 1.35);
+    const algae = Math.max(0, 0.35 - nrm.y) * (0.35 + 0.65 * (fbm3(nrm.x * 3 - s, nrm.y * 3, nrm.z * 3, 3) * 0.5 + 0.5));
+    const lichen = Math.pow(Math.max(0, fbm3(nrm.x * 7 - s, nrm.y * 6, nrm.z * 7, 3) - 0.32), 1.5) * Math.max(0, nrm.y + 0.15);
+    const stain = Math.exp(-Math.pow((nrm.y - 0.05) * 3.5, 2.0)) * 0.16;
+    let rr = tone[0] * m + vein * 0.16 - pore * 0.14 - crack * 0.08;
+    let gg = tone[1] * m + vein * 0.12 - pore * 0.08 - crack * 0.05;
+    let bb = tone[2] * m + vein * 0.09 - pore * 0.06 - crack * 0.04;
+    rr = rr * (1 - algae * 0.45) + algae * 0.05 - stain * 0.06 + lichen * 0.03;
+    gg = gg * (1 - algae * 0.15) + algae * 0.14 + stain * 0.03 + lichen * 0.10;
+    bb = bb * (1 - algae * 0.55) + algae * 0.03 - stain * 0.02 + lichen * 0.04;
     col[i * 3] = rr; col[i * 3 + 1] = gg; col[i * 3 + 2] = bb;
   }
   g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  g.computeVertexNormals();
+  // flat-ish look: average normals per face slightly by not smoothing too much —
+  // recompute with crease via angle threshold
   g.computeVertexNormals();
   return g;
 }
@@ -434,9 +477,9 @@ export function createScenery(scene) {
 
   // ---- rocks
   const rockMat = patchWater(
-    new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.62, metalness: 0.06 }),
+    new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.72, metalness: 0.04, flatShading: false }),
     {
-      key: 'rock4', soft: 1.2,
+      key: 'rock5', soft: 1.35,
       onShader(shader) {
         shader.fragmentShader = shader.fragmentShader.replace(
           '#include <roughnessmap_fragment>',
