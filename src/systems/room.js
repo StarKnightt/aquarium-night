@@ -21,7 +21,7 @@ function worldUV(geo, scale = 1) {
   return geo;
 }
 
-// Glass panes: reflection of a dim living room, green iron-glass edge tint, near-invisible face-on.
+// Glass panes: stronger night-room reflections, green iron edge, dust/spots/fingerprints, visible thickness feel.
 const glassMat = () =>
   new THREE.ShaderMaterial({
     transparent: true,
@@ -31,7 +31,7 @@ const glassMat = () =>
     blendSrc: THREE.OneFactor,
     blendDst: THREE.OneMinusSrcAlphaFactor,
     side: THREE.DoubleSide,
-    uniforms: { uThick: { value: 0.016 } },
+    uniforms: { uThick: { value: 0.022 } },
     vertexShader: /* glsl */ `
       varying vec3 vN; varying vec3 vW;
       void main() {
@@ -51,20 +51,35 @@ const glassMat = () =>
         vec3 V = normalize(cameraPosition - vW);
         if (!gl_FrontFacing) N = -N;
         float ndv = clamp(abs(dot(N, V)), 0.0, 1.0);
-        float F = 0.045 + 0.955 * pow(1.0 - ndv, 5.0);
-        N = normalize(N + 0.0025 * vec3(vn(vW.xy * 7.0) - 0.5, vn(vW.yz * 6.0) - 0.5, vn(vW.zx * 5.0) - 0.5));
+        float F = 0.055 + 0.945 * pow(1.0 - ndv, 4.6);
+        // micro-waviness + hard-water spots bump the normal
+        float spot = smoothstep(0.72, 0.95, vn(vW.xy * 38.0 + 1.7) * 0.55 + vn(vW.xy * 90.0) * 0.45);
+        float finger = smoothstep(0.78, 0.98, vn(vW.xy * 9.0 + 4.0)) * smoothstep(0.5, 0.9, vn(vW.xy * 3.2));
+        N = normalize(N + 0.004 * vec3(vn(vW.xy * 7.0) - 0.5, vn(vW.yz * 6.0) - 0.5, vn(vW.zx * 5.0) - 0.5)
+                        + 0.012 * spot * vec3(0.0, 0.4, 0.0));
         vec3 R = reflect(-V, N);
-        vec3 refl = roomEnv(R) * (F * 2.6 + 0.02);
-        float sm = smoothstep(0.55, 0.95, vn(vW.xy * 22.0 + 3.0) * 0.6 + vn(vW.xy * 60.0) * 0.4) * (0.4 + 0.6 * vn(vW.xy * 4.0));
-        vec3 dust = vec3(0.55, 0.65, 0.85) * sm * 0.010 * step(0.5, abs(N.z));
-        float gr = max(1.0 / max(ndv, 0.03) - 1.0, 0.0);      // extra path vs face-on: green shows only at the edges
-        float ab = 1.0 - exp(-gr * uThick * 34.0);
-        vec3 tint = vec3(0.07, 0.40, 0.26) * ab * 0.055;
-        float a = clamp(F * 0.6 + ab * 0.30 + 0.004 + sm * 0.01, 0.0, 0.92);
+        // room reflections: stronger so a dim living room reads in the pane from a distance
+        vec3 refl = roomEnv(R) * (F * 4.2 + 0.035);
+        // warm lamp blob in the right-hand reflection, cool window in the left
+        float lampBlob = pow(max(0.0, R.x * 0.55 + R.y * 0.35 + 0.15), 8.0);
+        float winBlob = pow(max(0.0, -R.x * 0.4 + R.y * 0.5 + 0.05), 10.0);
+        refl += vec3(1.0, 0.55, 0.22) * lampBlob * F * 1.4;
+        refl += vec3(0.25, 0.40, 0.75) * winBlob * F * 0.55;
+        // dust / salt creep near rim + fingerprints
+        float nearRim = smoothstep(0.32, 0.44, vW.y) * (1.0 - smoothstep(0.44, 0.48, vW.y));
+        float sm = spot * (0.35 + 0.65 * vn(vW.xy * 4.0));
+        vec3 dust = vec3(0.62, 0.70, 0.88) * (sm * 0.016 + finger * 0.022 + nearRim * sm * 0.04) * step(0.35, abs(N.z));
+        // condensation streaks under the light (upper third of front glass)
+        float streak = abs(sin(vW.x * 55.0 + vn(vec2(vW.x * 8.0, 0.0)) * 4.0)) ;
+        streak = smoothstep(0.82, 1.0, streak) * smoothstep(0.28, 0.42, vW.y) * (1.0 - smoothstep(0.42, 0.48, vW.y));
+        dust += vec3(0.7, 0.85, 1.0) * streak * 0.018 * step(0.5, abs(N.z));
+        float gr = max(1.0 / max(ndv, 0.025) - 1.0, 0.0);
+        float ab = 1.0 - exp(-gr * uThick * 42.0);
+        vec3 tint = vec3(0.06, 0.42, 0.28) * ab * 0.10;
+        float a = clamp(F * 0.72 + ab * 0.38 + 0.006 + sm * 0.014 + finger * 0.02, 0.0, 0.94);
         gl_FragColor = vec4(refl + tint + dust, a);
       }`,
   });
-
 export function createRoom(scene, renderer) {
   const group = new THREE.Group();
   scene.add(group);
@@ -178,6 +193,26 @@ export function createRoom(scene, renderer) {
     m.renderOrder = 10;
     tank.add(m);
   }
+  // visible green glass edge strips at vertical corners (iron glass look)
+  {
+    const edgeMat = new THREE.MeshBasicMaterial({
+      color: new THREE.Color(0.12, 0.42, 0.28), transparent: true, opacity: 0.55, depthWrite: false, toneMapped: true,
+    });
+    const eh = H - g;
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+      const eg = new THREE.Mesh(new THREE.BoxGeometry(0.0035, eh, 0.0035), edgeMat);
+      eg.position.set(sx * (hw - g * 0.15), g + eh / 2, sz * (hd - g * 0.15));
+      eg.renderOrder = 11;
+      tank.add(eg);
+    }
+    // top rim polish bevel (thin dark lip)
+    const rim = new THREE.Mesh(
+      new THREE.BoxGeometry(hw * 2 - 0.01, 0.004, hd * 2 - 0.01),
+      patchRoom(new THREE.MeshStandardMaterial({ color: 0x0a0c10, roughness: 0.35, metalness: 0.4, envMap: envTex, envMapIntensity: 0.6 }), { key: 'rim' })
+    );
+    rim.position.set(0, H - 0.002, 0);
+    tank.add(rim);
+  }
   // silicone beads (black) at inner corners and bottom seams
   const beadMat = patchRoom(new THREE.MeshStandardMaterial({ color: 0x050607, roughness: 0.25, metalness: 0 }), { key: 'bead' });
   const bead = (w, h, d, x, y, z) => {
@@ -226,12 +261,15 @@ export function createRoom(scene, renderer) {
   fixture.position.set(0, 0.515, -0.06);
   group.add(fixture);
 
-  // soft glow around the fixture (additive sprites)
+  // soft glow around the fixture — tight core + wide cool veil (halation in-scene)
   const glowTex = makeGlow(128);
-  const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: new THREE.Color(0.35, 0.55, 0.85), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.14, toneMapped: false }));
-  glow.scale.set(1.05, 0.18, 1);
+  const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: new THREE.Color(0.45, 0.65, 0.95), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.22, toneMapped: false }));
+  glow.scale.set(1.15, 0.22, 1);
   glow.position.set(0, 0.5, 0.0);
-  group.add(glow);
+  const glowWide = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: new THREE.Color(0.25, 0.45, 0.85), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.10, toneMapped: false }));
+  glowWide.scale.set(1.9, 0.55, 1);
+  glowWide.position.set(0, 0.48, 0.05);
+  group.add(glow, glowWide);
 
   // ---- floor lamp (far right) and moonlit window + curtain (far left): pure atmosphere
   const lampGroup = new THREE.Group();
@@ -291,27 +329,124 @@ export function createRoom(scene, renderer) {
   }
 
   // ---- lights
-  // 1) the light that lives in the water (directional, patched materials only)
-  const sun = new THREE.DirectionalLight(new THREE.Color(0.95, 0.97, 1.0), 4.2);
+  // 1) LED as soft area key (directional + large PCF radius for penumbra)
+  const sun = new THREE.DirectionalLight(new THREE.Color(0.92, 0.96, 1.0), 3.6);
   sun.position.set(0.0, 1.25, -0.10);
   sun.target.position.set(0, 0.1, 0);
   sun.castShadow = true;
   sun.shadow.mapSize.set(Q.shadowMap, Q.shadowMap);
   const sc = sun.shadow.camera;
   sc.left = -0.55; sc.right = 0.55; sc.top = 0.26; sc.bottom = -0.26; sc.near = 0.72; sc.far = 1.5;
-  sun.shadow.bias = -0.0004;
-  sun.shadow.normalBias = 0.002;
-  sun.shadow.radius = 4;
+  sun.shadow.bias = -0.00035;
+  sun.shadow.normalBias = 0.0035;
+  sun.shadow.radius = Q.name === 'high' ? 8 : 3;
   scene.add(sun, sun.target);
 
-  // 2) room lights (point, patched-room materials only)
-  const spill = new THREE.PointLight(new THREE.Color(0.55, 0.78, 1.0), 0.28, 6, 2);
-  spill.position.set(0, 0.62, 0.15);
-  const under = new THREE.PointLight(new THREE.Color(0.18, 0.68, 0.75), 0.32, 2.8, 2);
-  under.position.set(0, 0.22, 0.42);
-  const lamp = new THREE.PointLight(new THREE.Color(1.0, 0.55, 0.26), 1.0, 7, 2);
+  // 2) room lights — spill of tank glow onto stand/wall/floor + warm lamp + sand bounce
+  const spill = new THREE.PointLight(new THREE.Color(0.50, 0.78, 1.05), 0.38, 7, 1.8);
+  spill.position.set(0, 0.58, 0.18);
+  const under = new THREE.PointLight(new THREE.Color(0.22, 0.72, 0.80), 0.40, 3.2, 1.7);
+  under.position.set(0, 0.18, 0.38);
+  const bounce = new THREE.PointLight(new THREE.Color(0.55, 0.72, 0.55), 0.22, 1.6, 2.0);
+  bounce.position.set(0, 0.05, 0.05);
+  const standGlow = new THREE.PointLight(new THREE.Color(0.45, 0.70, 0.95), 0.20, 2.4, 2.0);
+  standGlow.position.set(0, 0.02, 0.12);
+  const wallWash = new THREE.PointLight(new THREE.Color(0.35, 0.55, 0.85), 0.28, 4.5, 1.6);
+  wallWash.position.set(0, 0.55, -0.35);
+  const lamp = new THREE.PointLight(new THREE.Color(1.0, 0.55, 0.26), 0.95, 7.5, 1.9);
   lamp.position.set(1.05, floorY + 1.3, -0.35);
-  scene.add(spill, under, lamp);
+  const moon = new THREE.PointLight(new THREE.Color(0.35, 0.45, 0.75), 0.12, 5, 2);
+  moon.position.set(-1.2, 0.5, -0.4);
+  scene.add(spill, under, bounce, standGlow, wallWash, lamp, moon);
 
-  return { group, envTex, sun, spill, under, lamp, fixture, glassMaterial: glassM };
+  // projected caustic wash on the wall/ceiling above the tank (signature night-aquarium look)
+  {
+    const caustPlane = new THREE.Mesh(
+      new THREE.PlaneGeometry(2.4, 1.6),
+      new THREE.ShaderMaterial({
+        transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+        uniforms: { uTime: WU.uTime, uCaust: WU.uCaust },
+        vertexShader: 'varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
+        fragmentShader: /* glsl */ `
+          varying vec2 vUv; uniform float uTime; uniform sampler2D uCaust;
+          void main(){
+            vec2 uv = vUv * vec2(1.6, 0.9) + vec2(0.1, 0.2);
+            float c = texture2D(uCaust, uv + vec2(uTime * 0.01, 0.0)).g;
+            float c2 = texture2D(uCaust, uv * 0.55 + vec2(0.3, -uTime * 0.008)).g;
+            float m = pow(clamp(c * 0.6 + c2 * 0.4, 0.0, 2.5), 2.2);
+            float fall = smoothstep(0.0, 0.25, vUv.y) * smoothstep(1.0, 0.55, vUv.y)
+                       * smoothstep(0.0, 0.18, vUv.x) * smoothstep(1.0, 0.82, vUv.x);
+            gl_FragColor = vec4(vec3(0.35, 0.65, 0.95) * m * fall * 0.14, 1.0);
+          }`,
+      })
+    );
+    caustPlane.position.set(0, 0.95, backZ + 0.005);
+    caustPlane.renderOrder = -1;
+    group.add(caustPlane);
+  }
+
+  // sofa + side-table silhouettes (dim living room presence)
+  {
+    const sofaMat = patchRoom(new THREE.MeshStandardMaterial({ color: 0x1a1c22, roughness: 0.92 }), { key: 'sofa' });
+    const sofa = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.42, 0.55), sofaMat);
+    sofa.position.set(-1.55, floorY + 0.28, 0.55);
+    const sofaBack = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.55, 0.12), sofaMat);
+    sofaBack.position.set(-1.55, floorY + 0.55, 0.32);
+    const tableMat = patchRoom(new THREE.MeshStandardMaterial({ color: 0x2a2218, roughness: 0.55, envMap: envTex, envMapIntensity: 0.4 }), { key: 'table' });
+    const sideTable = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.17, 0.42, 16), tableMat);
+    sideTable.position.set(1.35, floorY + 0.21, 0.35);
+    // bookshelf block on left wall
+    const shelf = new THREE.Mesh(new THREE.BoxGeometry(0.55, 1.1, 0.22), sofaMat);
+    shelf.position.set(-2.25, floorY + 0.7, -0.35);
+    // TV standby LED glow (tiny red point)
+    const tv = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.52, 0.04), blackMat);
+    tv.position.set(1.7, floorY + 1.05, backZ + 0.03);
+    const standby = new THREE.Mesh(new THREE.SphereGeometry(0.006, 8, 8), new THREE.MeshBasicMaterial({ color: new THREE.Color(1.4, 0.15, 0.05), toneMapped: false }));
+    standby.position.set(2.05, floorY + 0.82, backZ + 0.05);
+    // rug under stand
+    const rug = new THREE.Mesh(
+      new THREE.PlaneGeometry(1.8, 1.3),
+      patchRoom(new THREE.MeshStandardMaterial({ color: 0x2c2430, roughness: 1 }), { key: 'rug' })
+    );
+    rug.rotation.x = -Math.PI / 2;
+    rug.position.set(0, floorY + 0.003, 0.15);
+    group.add(sofa, sofaBack, sideTable, shelf, tv, standby, rug);
+  }
+
+  // tank hardware: lily-pipe outflow, heater, thermometer
+  {
+    const chrome = patchRoom(new THREE.MeshStandardMaterial({ color: 0xb0b4ba, metalness: 0.95, roughness: 0.28, envMap: envTex, envMapIntensity: 1.2 }), { key: 'pipe' });
+    const tube = (r, h, x, y, z, rx = 0, ry = 0, rz = 0) => {
+      const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, 10), chrome);
+      m.position.set(x, y, z); m.rotation.set(rx, ry, rz); tank.add(m); return m;
+    };
+    // lily pipe on right rear
+    tube(0.006, 0.28, 0.42, 0.22, -0.14);
+    tube(0.006, 0.08, 0.42, 0.36, -0.10, Math.PI / 2.6, 0, 0);
+    const cup = new THREE.Mesh(new THREE.TorusGeometry(0.018, 0.004, 8, 16, Math.PI), chrome);
+    cup.position.set(0.42, 0.38, -0.055); cup.rotation.x = Math.PI / 2;
+    tank.add(cup);
+    // heater tube left rear
+    const heater = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.011, 0.011, 0.22, 10),
+      patchRoom(new THREE.MeshStandardMaterial({ color: 0x1a1c20, roughness: 0.45, metalness: 0.3, envMap: envTex, envMapIntensity: 0.5 }), { key: 'heat' })
+    );
+    heater.position.set(-0.44, 0.16, -0.14);
+    tank.add(heater);
+    // suction cups
+    const rub = patchRoom(new THREE.MeshStandardMaterial({ color: 0x2a2a2e, roughness: 0.7 }), { key: 'suc' });
+    for (const yy of [0.08, 0.24]) {
+      const s = new THREE.Mesh(new THREE.SphereGeometry(0.008, 8, 8), rub);
+      s.position.set(-0.44, yy, -0.155); tank.add(s);
+    }
+    // stick-on thermometer on front-left glass (inside)
+    const thermo = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.018, 0.09),
+      patchWater(new THREE.MeshBasicMaterial({ color: 0xe8e4d8, transparent: true, opacity: 0.85 }), { caustics: false, key: 'thermo' })
+    );
+    thermo.position.set(-0.46, 0.28, hd - g - 0.002);
+    tank.add(thermo);
+  }
+
+  return { group, envTex, sun, spill, under, lamp, bounce, fixture, glassMaterial: glassM };
 }

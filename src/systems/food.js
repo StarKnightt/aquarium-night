@@ -10,22 +10,31 @@ import { mulberry32 } from '../core/noise.js';
 export function createFood(scene, { water, onEvent } = {}) {
   const MAX = 140;
   const rnd = mulberry32(31337);
-  const geo = new THREE.PlaneGeometry(1, 1);
+  // irregular flake shape (not a perfect rectangle)
+  const shape = new THREE.Shape();
+  shape.moveTo(-0.45, -0.35);
+  shape.quadraticCurveTo(-0.55, 0.05, -0.38, 0.42);
+  shape.quadraticCurveTo(-0.05, 0.55, 0.32, 0.40);
+  shape.quadraticCurveTo(0.55, 0.08, 0.42, -0.32);
+  shape.quadraticCurveTo(0.05, -0.52, -0.45, -0.35);
+  const geo = new THREE.ShapeGeometry(shape, 5);
+  geo.scale(1, 1, 1);
   const mat = patchWater(
     new THREE.MeshStandardMaterial({
-      roughness: 0.55,
-      metalness: 0.05,
+      roughness: 0.62,
+      metalness: 0.04,
       side: THREE.DoubleSide,
       vertexColors: false,
-      emissive: 0x6a2808,
-      emissiveIntensity: 0.45,
+      emissive: 0x5a2208,
+      emissiveIntensity: 0.38,
     }),
-    { key: 'flake2' }
+    { key: 'flake3' }
   );
   const mesh = new THREE.InstancedMesh(geo, mat, MAX);
   mesh.frustumCulled = false;
   mesh.castShadow = false;
   mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(MAX * 3), 3);
   scene.add(mesh);
 
   const flakes = [];
@@ -44,8 +53,9 @@ export function createFood(scene, { water, onEvent } = {}) {
         y: TANK.surfaceY + 0.04 + rnd() * 0.06,
         vx: (rnd() - 0.5) * 0.02, vy: 0, vz: (rnd() - 0.5) * 0.02,
         rx: rnd() * 6.28, ry: rnd() * 6.28, rz: rnd() * 6.28, sx: (rnd() - 0.5) * 2.4, sy: (rnd() - 0.5) * 2.4,
-        size: 0.0055 + rnd() * 0.0055, state: 'air', t: 0, floatTime: 2.5 + rnd() * 5.0, sinkV: 0.011 + rnd() * 0.010,
+        size: 0.0058 + rnd() * 0.0065, state: 'air', t: 0, floatTime: 2.5 + rnd() * 5.0, sinkV: 0.011 + rnd() * 0.010,
         col: palette[Math.floor(rnd() * palette.length)], eaten: false, seed: rnd() * 100, life: 0,
+        aspect: 0.65 + rnd() * 0.7,
       });
     }
     onEvent?.('drop', { x, z });
@@ -90,7 +100,7 @@ export function createFood(scene, { water, onEvent } = {}) {
       dummy.position.set(f.x, f.y, f.z);
       dummy.quaternion.copy(q);
       const sc = f.size * (f.state === 'sand' ? Math.max(0.35, 1 - Math.max(0, f.life - 25) / 45) : 1);
-      dummy.scale.set(sc, sc * 0.8, sc);
+      dummy.scale.set(sc * (f.aspect || 1), sc * 0.55, sc);
       dummy.updateMatrix();
       mesh.setMatrixAt(i, dummy.matrix);
       tmpC.setRGB(f.col[0], f.col[1], f.col[2]);

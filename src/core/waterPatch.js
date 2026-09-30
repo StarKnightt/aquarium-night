@@ -14,12 +14,12 @@ export const WU = {
   uCaust: { value: null },
   uBoxMin: { value: new THREE.Vector3(-TANK.iw, TANK.waterMinY, -TANK.id) },
   uBoxMax: { value: new THREE.Vector3(TANK.iw, TANK.surfaceY, TANK.id) },
-  uAbsorb: { value: new THREE.Vector3(0.55, 0.24, 0.20) },   // 1/m, red dies first
-  uScatter: { value: new THREE.Color(0.018, 0.042, 0.050) }, // soft cyan-green tank fill
-  uAmbient: { value: new THREE.Color(0.11, 0.15, 0.165) },
-  uCaustGain: { value: 0.72 },
+  uCaustGain: { value: 0.82 },
   uDbg: { value: 0 },
-  uRoomAmbient: { value: new THREE.Color(0.010, 0.012, 0.016) },
+  uRoomAmbient: { value: new THREE.Color(0.012, 0.014, 0.018) },
+  uAbsorb: { value: new THREE.Vector3(0.52, 0.23, 0.19) },
+  uScatter: { value: new THREE.Color(0.020, 0.045, 0.052) },
+  uAmbient: { value: new THREE.Color(0.115, 0.155, 0.170) },
 };
 
 const waterGLSL = /* glsl */ `

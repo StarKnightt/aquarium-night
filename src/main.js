@@ -17,7 +17,7 @@ import { createExplore } from './systems/explore.js';
 const canvas = document.getElementById('c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance', stencil: false, preserveDrawingBuffer: isDebug });
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = isCine ? 0.98 : 0.92;
+renderer.toneMappingExposure = isCine ? 0.95 : 0.88;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.setClearColor(0x000000, 1);
@@ -79,6 +79,8 @@ function applyOrbitLimits() {
 }
 
 const post = createPost(renderer, scene, camera); console.log('boot: post ok');
+// Keep DoF focus locked to the orbit look-at (tank centre by default; updated by setCam)
+post.focusPoint.copy(target);
 
 let explore = null;
 let baseDist = 1.4;
@@ -302,6 +304,13 @@ if (!isCine) {
     if (el) { el.style.display = 'none'; el.style.opacity = '0'; }
   }
 }
+// Shot harness: hide UI chrome so stills look like photographs
+if (isDebug && !isCine) {
+  for (const id of ['hint', 'snd', 'explore', 'veil']) {
+    const el = document.getElementById(id);
+    if (el) { el.style.opacity = '0'; el.style.pointerEvents = 'none'; }
+  }
+}
 
 // ---- debug/screenshot API (used by the critic harness; harmless in production)
 window.__aqU = WU;
@@ -331,6 +340,7 @@ window.__aq = {
     controls.maxDistance = 20;
     camera.position.set(...pos);
     controls.target.set(...look);
+    post.focusPoint.set(...look);
     controls.update();
   },
   advance(seconds, step = 1 / 30) {

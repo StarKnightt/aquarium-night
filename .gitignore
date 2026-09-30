@@ -2,4 +2,6 @@ node_modules
 dist
 shots
 video
+og/
 *.log
+docs-notes/

@@ -120,9 +120,11 @@ void bladeFrame(float t, float u, out vec3 P, out vec3 N) {
   vec3 S = vec3(cos(yaw + twist * t), 0.0, sin(yaw + twist * t));
   S = normalize(S - Tn * dot(S, Tn));
   float wTape = W * (1.0 - smoothstep(0.72, 1.0, t) * 0.92);
+  // edge waviness / serration along the blade length
+  float serr = sin(t * 28.0 + phase * 9.0) * 0.07 * W * step(0.5, shape);
   float lance = sin(pow(t, 0.72) * 3.14159);
   float wLeaf = W * (0.10 + 0.90 * lance) * mix(0.32, 1.0, smoothstep(0.06, 0.34, t));
-  float w = mix(wTape, wLeaf, step(0.5, shape));
+  float w = mix(wTape, wLeaf, step(0.5, shape)) + serr;
   float uu = u - 0.5;
   float cup = uu * uu * 4.0;
   vec3 N0 = normalize(cross(Tn, S));
@@ -229,16 +231,23 @@ function bladeMaterials() {
         shader.fragmentShader = shader.fragmentShader.replace(
           '#include <color_fragment>',
           `#include <color_fragment>
-           float veinB = 1.0 - 0.28 * smoothstep(0.10, 0.0, abs(vU - 0.5));
-           diffuseColor.rgb *= vCol * mix(0.85, 1.5, smoothstep(0.0, 1.0, vT)) * veinB;`
+           // midrib + lateral veins + slight edge darkening
+           float midrib = 1.0 - 0.38 * smoothstep(0.07, 0.0, abs(vU - 0.5));
+           float veinL = 0.92 + 0.08 * sin(vT * 48.0 + vU * 6.0);
+           float edge = smoothstep(0.0, 0.08, vU) * smoothstep(1.0, 0.92, vU);
+           // yellowed old tips + age mottling
+           float age = smoothstep(0.72, 1.0, vT) * 0.55 + 0.15 * fract(sin(vCol.g * 40.0) * 20.0);
+           vec3 old = mix(vCol, vec3(0.22, 0.16, 0.04), age * 0.55);
+           diffuseColor.rgb *= old * midrib * veinL * mix(0.78, 1.55, smoothstep(0.0, 1.0, vT)) * (0.75 + 0.25 * edge);`
         );
-        // light shining through the leaf blade (translucency): tinted yellow-green, follows the caustic pattern
+        // stronger translucency / backlight glow
         shader.fragmentShader = shader.fragmentShader.replace(
           '#include <emissivemap_fragment>',
           `#include <emissivemap_fragment>
            { float dpt = max(uBoxMax.y - vWPos.y, 0.0);
-             vec3 tl = diffuseColor.rgb * vec3(1.15, 1.1, 0.55) * causticAt(vWPos) * exp(-dpt * 1.3);
-             totalEmissiveRadiance += tl * (0.55 + 0.6 * smoothstep(0.1, 1.0, vT)) * 0.45; }`
+             vec3 tl = diffuseColor.rgb * vec3(1.25, 1.2, 0.5) * causticAt(vWPos) * exp(-dpt * 1.15);
+             float thin = 0.7 + 0.55 * (1.0 - abs(vU - 0.5) * 2.0);
+             totalEmissiveRadiance += tl * thin * (0.65 + 0.7 * smoothstep(0.08, 1.0, vT)) * 0.72; }`
         );
       },
     }
@@ -261,8 +270,8 @@ export function createScenery(scene) {
   const rnd = mulberry32(2024);
 
   // ---- sand
-  const { albedo, normal } = makeSand(1024);
-  albedo.repeat.set(7, 3); normal.repeat.set(7, 3);
+  const { albedo, normal } = makeSand(Q.name === 'high' ? 1536 : 768);
+  albedo.repeat.set(9, 4); normal.repeat.set(9, 4);
   const w = TANK.iw * 2 - 0.002, d = TANK.id * 2 - 0.002;
   const sgeo = new THREE.PlaneGeometry(w, d, Q.sandSeg[0], Q.sandSeg[1]);
   sgeo.rotateX(-Math.PI / 2);
@@ -271,22 +280,60 @@ export function createScenery(scene) {
   for (let i = 0; i < sp.count; i++) {
     const x = sp.getX(i), z = sp.getZ(i);
     sp.setY(i, sandHeight(x, z));
-    const t = 0.80 + 0.32 * (fbm2(x * 5.5 + 9, z * 7.0, 3) * 0.5 + 0.5) + 0.10 * noise2(x * 22, z * 22);
-    const warm = 0.03 * noise2(x * 3 + 7, z * 3);
-    scol[i * 3] = t * (1 + warm); scol[i * 3 + 1] = t; scol[i * 3 + 2] = t * (1 - warm);
+    const t = 0.78 + 0.38 * (fbm2(x * 5.5 + 9, z * 7.0, 3) * 0.5 + 0.5) + 0.14 * noise2(x * 28, z * 28);
+    const warm = 0.05 * noise2(x * 3 + 7, z * 3);
+    // tiny grit / detritus dark flecks
+    const grit = Math.pow(Math.max(0, noise2(x * 55 + 2, z * 55) - 0.55), 2.0);
+    scol[i * 3] = t * (1 + warm) * (1 - grit * 0.45);
+    scol[i * 3 + 1] = t * (1 - grit * 0.35);
+    scol[i * 3 + 2] = t * (1 - warm) * (1 - grit * 0.25);
   }
   sgeo.setAttribute('color', new THREE.BufferAttribute(scol, 3));
   sgeo.computeVertexNormals();
   const sandMat = patchWater(
-    new THREE.MeshStandardMaterial({ map: albedo, normalMap: normal, normalScale: new THREE.Vector2(1.1, 1.1), roughness: 0.93, metalness: 0, vertexColors: true }),
-    { key: 'sand' }
+    new THREE.MeshStandardMaterial({
+      map: albedo, normalMap: normal, normalScale: new THREE.Vector2(1.55, 1.55),
+      roughness: 0.88, metalness: 0, vertexColors: true,
+    }),
+    {
+      key: 'sand2',
+      onShader(shader) {
+        // micro-glints from wet quartz grains catching the LED
+        shader.fragmentShader = shader.fragmentShader.replace(
+          '#include <emissivemap_fragment>',
+          `#include <emissivemap_fragment>
+           { float g = fract(sin(dot(vWPos.xz * 420.0, vec2(12.9898,78.233))) * 43758.5453);
+             float glint = step(0.992, g) * pow(max(0.0, causticAt(vWPos).g), 1.4);
+             totalEmissiveRadiance += vec3(0.95, 0.92, 0.82) * glint * 0.55; }`
+        );
+      },
+    }
   );
   const sand = new THREE.Mesh(sgeo, sandMat);
   sand.receiveShadow = true;
   group.add(sand);
 
   // ---- rocks
-  const rockMat = patchWater(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.68, metalness: 0.0 }), { key: 'rock', soft: 1.7 });
+  const rockMat = patchWater(
+    new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0.04 }),
+    {
+      key: 'rock2', soft: 1.4,
+      onShader(shader) {
+        // wet specular sheen + algae film catches light
+        shader.fragmentShader = shader.fragmentShader.replace(
+          '#include <roughnessmap_fragment>',
+          `#include <roughnessmap_fragment>
+           roughnessFactor *= 0.72;`
+        );
+        shader.fragmentShader = shader.fragmentShader.replace(
+          '#include <emissivemap_fragment>',
+          `#include <emissivemap_fragment>
+           { float wet = pow(max(0.0, causticAt(vWPos, 1.2).g), 1.8);
+             totalEmissiveRadiance += diffuseColor.rgb * wet * 0.18; }`
+        );
+      },
+    }
+  );
   const seg = [Q.rockSub * 14, Q.rockSub * 10];
   const rockDefs = ROCKS;
   const rocks = [];

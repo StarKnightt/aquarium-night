@@ -33,8 +33,8 @@ function createCaustics(renderer) {
     do { ix = Math.round((rnd() * 2 - 1) * 12); iy = Math.round((rnd() * 2 - 1) * 12); } while ((ix === 0 && iy === 0) || ix * ix + iy * iy > 150 || ix * ix + iy * iy < 6);
     const m = Math.hypot(ix, iy);
     K.push(new THREE.Vector2(ix, iy));
-    C.push((0.22 + rnd() * 0.18) * (1.0 + 2.0 / m));   // softer focusing (less hard mesh)
-    Wv.push(0.55 * Math.sqrt(m) * (0.6 + rnd() * 0.8)); // angular speed
+    C.push((0.28 + rnd() * 0.22) * (1.0 + 2.4 / m));   // sharper focusing filaments
+    Wv.push(0.42 * Math.sqrt(m) * (0.55 + rnd() * 0.7)); // slower, more natural drift
     Ph.push(rnd() * 6.283);
   }
   const mat = new THREE.ShaderMaterial({
@@ -61,11 +61,13 @@ function createCaustics(renderer) {
         for (int ch = 0; ch < 3; ch++) {
           float d = 1.0 + 0.025 * float(ch);            // slight dispersion per channel
           float det = (1.0 + d * hxx) * (1.0 + d * hyy) - d * d * hxy * hxy;
-          float I = 1.0 / (abs(det) + 0.045);
+          float I = 1.0 / (abs(det) + 0.028);
           out3[ch] = I;
         }
-        out3 = pow(out3 * 0.055, vec3(1.85));
-        out3 = out3 / (1.0 + out3 * 0.14);
+        out3 = pow(out3 * 0.042, vec3(1.65));
+        // filament peak: keep thin bright ridges, soft floors
+        out3 = max(out3 - 0.08, 0.0);
+        out3 = out3 / (1.0 + out3 * 0.10);
         gl_FragColor = vec4(out3, 1.0);
       }`,
   });
@@ -198,7 +200,7 @@ function createRays() {
   const mat = new THREE.ShaderMaterial({
     transparent: true, depthWrite: false, side: THREE.BackSide,
     blending: THREE.AdditiveBlending,
-    uniforms: { ...WU, uSteps: { value: Q.rayBands }, uRayGain: { value: 1.0 } },
+    uniforms: { ...WU, uSteps: { value: Q.rayBands }, uRayGain: { value: 1.35 } },
     vertexShader: 'varying vec3 vW; void main(){ vec4 w = modelMatrix * vec4(position,1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }',
     fragmentShader: /* glsl */ `
       varying vec3 vW;
@@ -217,23 +219,28 @@ function createRays() {
         float jit = hash(gl_FragCoord.xy + uTime);
         vec3 acc = vec3(0.0);
         float trans = 1.0;
-        for (float i = 0.0; i < 16.0; i++) {
+        // sparse shaft mask: noise-modulated vertical bands tied to caustic pattern
+        for (float i = 0.0; i < 20.0; i++) {
           if (i >= uSteps) break;
           float t = te + (i + jit) * dt;
           vec3 p = ro + rd * t;
           float depth = max(uBoxMax.y - p.y, 0.0);
           vec2 uv = p.xz * 2.0 + vec2(0.13, 0.31) + vec2(p.y * 0.05, 0.0);
-          float sh = textureLod(uCaust, vec2(uv.x * 0.7, uv.y * 0.15), 2.2).g;   // stretched along depth = vertical streaks
-          float sh2 = textureLod(uCaust, vec2(uv.x * 0.37 + 0.31, uv.y * 0.10), 1.6).g;
-          float shafts = pow(clamp(sh * 0.55 + sh2 * 0.45, 0.0, 3.0), 2.7);
-          // light bar footprint: strongest at centre and under the bar, fades toward corners
-          float foot = smoothstep(0.55, 0.05, abs(p.x)) * 0.35 + 0.65;
-          float zf = smoothstep(0.24, -0.18, p.z) * 0.3 + 0.7;
-          float lightAmt = exp(-depth * 2.2) * foot * zf;
-          acc += trans * uScatter * lightAmt * (0.03 + 3.0 * shafts) * dt * L;
-          trans *= exp(-dot(uAbsorb, vec3(0.33)) * dt * L * 0.6);
+          float sh = textureLod(uCaust, vec2(uv.x * 0.7, uv.y * 0.15), 2.0).g;
+          float sh2 = textureLod(uCaust, vec2(uv.x * 0.37 + 0.31, uv.y * 0.10), 1.4).g;
+          float shafts = pow(clamp(sh * 0.55 + sh2 * 0.45, 0.0, 3.0), 2.4);
+          // noise sparsity so shafts aren't a uniform fog slab
+          float sparse = smoothstep(0.35, 0.85, hash(floor(p.xz * 14.0) + floor(uTime * 0.4)));
+          shafts *= 0.45 + 0.55 * sparse;
+          float foot = smoothstep(0.55, 0.05, abs(p.x)) * 0.4 + 0.6;
+          float zf = smoothstep(0.24, -0.18, p.z) * 0.35 + 0.65;
+          float lightAmt = exp(-depth * 2.0) * foot * zf;
+          // mild backscatter haze increasing toward far glass
+          float farHaze = smoothstep(0.05, -0.18, p.z) * 0.35;
+          acc += trans * uScatter * lightAmt * (0.06 + farHaze + 3.4 * shafts) * dt * L;
+          trans *= exp(-dot(uAbsorb, vec3(0.33)) * dt * L * 0.55);
         }
-        gl_FragColor = vec4(acc * uRayGain * 0.55, 1.0);
+        gl_FragColor = vec4(acc * uRayGain * 0.62, 1.0);
       }`,
   });
   const mesh = new THREE.Mesh(geo, mat);
