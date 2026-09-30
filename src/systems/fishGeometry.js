@@ -6,54 +6,115 @@ import { makeCanvas, canvasTexture } from '../core/textures.js';
 // ------------------------------------------------------------------------------------------------
 export const SPECIES = {
   neon: {
-    label: 'Neon tetra', count: 7, L: 0.034, hbox: 0.030, ltot: 1.30,
-    // smoother torpedo: more profile knots, rounder head/tail joins
-    hy: [[0, 0], [0.03, 0.028], [0.08, 0.070], [0.18, 0.108], [0.38, 0.122], [0.55, 0.112], [0.72, 0.078], [0.88, 0.042], [0.96, 0.030], [1, 0.026]],
-    hw: 0.68, belly: 0.94, dy: 0.0,
-    caudal: { len: 0.26, spread: 0.13, notch: 0.58 },
-    dorsal: { t0: 0.40, t1: 0.58, h: 0.13, sweep: 0.10 },
-    anal: { t0: 0.52, t1: 0.72, h: 0.10, sweep: 0.08 },
-    pect: { t: 0.24, len: 0.15, w: 0.05 },
-    speed: 0.075, turn: 3.2, school: 1.0, yPref: [0.10, 0.33], iri: 0.95, emissive: 0.0,
+    label: 'Neon tetra', count: 7, L: 0.042, hbox: 0.030, ltot: 1.32,
+    // L:H ~4.5:1 — slender tetra; stations: [t, hy, hwMul, belly]
+    stations: [
+      [0.00, 0.000, 0.40, 1.00],
+      [0.04, 0.045, 0.55, 0.95], // snout
+      [0.10, 0.095, 0.72, 0.92], // head
+      [0.18, 0.118, 0.95, 0.90], // operculum (widest)
+      [0.32, 0.125, 0.78, 0.94], // trunk
+      [0.50, 0.115, 0.72, 0.95],
+      [0.68, 0.085, 0.62, 0.96],
+      [0.85, 0.048, 0.50, 0.98],
+      [0.94, 0.032, 0.42, 1.00],
+      [1.00, 0.024, 0.38, 1.00], // peduncle
+    ],
+    dy: 0.0,
+    caudal: { len: 0.28, spread: 0.14, notch: 0.55 },
+    dorsal: { t0: 0.42, t1: 0.62, h: 0.14, sweep: 0.10 },
+    anal: { t0: 0.52, t1: 0.74, h: 0.11, sweep: 0.08 },
+    adipose: { t0: 0.70, t1: 0.82, h: 0.045, sweep: 0.04 },
+    pect: { t: 0.22, len: 0.16, w: 0.055 },
+    eye: { t: 0.10, y: 0.025, r: 0.055 },
+    scale: 'fine',
+    speed: 0.075, turn: 3.2, school: 1.0, yPref: [0.10, 0.33], iri: 1.05, emissive: 0.0,
     dispersion: 0.06,
   },
   platy: {
-    label: 'Red platy', count: 3, L: 0.046, hbox: 0.05, ltot: 1.30,
-    hy: [[0, 0], [0.04, 0.055], [0.12, 0.11], [0.28, 0.17], [0.45, 0.19], [0.62, 0.165], [0.8, 0.10], [0.92, 0.068], [1, 0.055]],
-    hw: 0.58, belly: 0.92, dy: 0.0,
-    caudal: { len: 0.27, spread: 0.19, notch: 0.72 },
-    dorsal: { t0: 0.36, t1: 0.58, h: 0.16, sweep: 0.12 },
-    anal: { t0: 0.52, t1: 0.70, h: 0.10, sweep: 0.06 },
-    pect: { t: 0.26, len: 0.16, w: 0.06 },
-    speed: 0.060, turn: 2.4, school: 0.5, yPref: [0.07, 0.34], iri: 0.28, emissive: 0.0,
+    label: 'Red platy', count: 3, L: 0.048, hbox: 0.048, ltot: 1.30,
+    stations: [
+      [0.00, 0.000, 0.45, 1.00],
+      [0.05, 0.070, 0.60, 0.92],
+      [0.12, 0.130, 0.78, 0.88],
+      [0.22, 0.175, 0.95, 0.86],
+      [0.40, 0.195, 0.82, 0.90],
+      [0.58, 0.175, 0.72, 0.92],
+      [0.78, 0.110, 0.58, 0.95],
+      [0.92, 0.068, 0.48, 0.98],
+      [1.00, 0.050, 0.42, 1.00],
+    ],
+    dy: 0.0,
+    caudal: { len: 0.28, spread: 0.20, notch: 0.72 },
+    dorsal: { t0: 0.36, t1: 0.58, h: 0.17, sweep: 0.12 },
+    anal: { t0: 0.52, t1: 0.70, h: 0.11, sweep: 0.06 },
+    pect: { t: 0.24, len: 0.17, w: 0.06 },
+    eye: { t: 0.11, y: 0.032, r: 0.038 },
+    scale: 'med',
+    speed: 0.060, turn: 2.4, school: 0.5, yPref: [0.07, 0.34], iri: 0.32, emissive: 0.0,
     dispersion: 0.08,
   },
   angel: {
-    label: 'Angelfish', count: 2, L: 0.055, hbox: 0.125, ltot: 1.55,
-    hy: [[0, 0], [0.03, 0.07], [0.10, 0.22], [0.22, 0.36], [0.40, 0.44], [0.58, 0.40], [0.75, 0.26], [0.90, 0.10], [0.97, 0.055], [1, 0.042]],
-    hw: 0.36, belly: 0.92, dy: 0.0,
-    caudal: { len: 0.34, spread: 0.30, notch: 0.82 },
-    dorsal: { t0: 0.34, t1: 0.86, h: 0.92, sweep: 0.55 },
-    anal: { t0: 0.46, t1: 0.92, h: 0.80, sweep: 0.5 },
-    pect: { t: 0.30, len: 0.16, w: 0.06 },
-    pelvic: { t: 0.32, len: 0.9 },
-    speed: 0.038, turn: 1.4, school: 0.4, yPref: [0.16, 0.34], iri: 0.35, emissive: 0.0,
+    label: 'Angelfish', count: 2, L: 0.062, hbox: 0.138, ltot: 1.60,
+    // tall disc-diamond ~1:1 body; fins double height
+    stations: [
+      [0.00, 0.000, 0.30, 1.00],
+      [0.04, 0.090, 0.42, 0.95],
+      [0.12, 0.260, 0.55, 0.92],
+      [0.25, 0.400, 0.62, 0.90],
+      [0.42, 0.460, 0.58, 0.92], // deepest
+      [0.60, 0.400, 0.52, 0.93],
+      [0.78, 0.240, 0.42, 0.95],
+      [0.92, 0.090, 0.32, 0.98],
+      [1.00, 0.040, 0.28, 1.00],
+    ],
+    dy: 0.0,
+    caudal: { len: 0.36, spread: 0.32, notch: 0.85 },
+    dorsal: { t0: 0.28, t1: 0.90, h: 1.05, sweep: 0.58 },
+    anal: { t0: 0.40, t1: 0.94, h: 0.95, sweep: 0.52 },
+    pect: { t: 0.28, len: 0.17, w: 0.06 },
+    pelvic: { t: 0.30, len: 1.05 },
+    eye: { t: 0.12, y: 0.100, r: 0.058 },
+    scale: 'large',
+    speed: 0.038, turn: 1.4, school: 0.4, yPref: [0.16, 0.34], iri: 0.42, emissive: 0.0,
     dispersion: 0.04,
   },
   cory: {
-    label: 'Corydoras', count: 2, L: 0.048, hbox: 0.040, ltot: 1.28,
-    // blunt rounded snout
-    hy: [[0, 0], [0.02, 0.038], [0.06, 0.072], [0.14, 0.115], [0.32, 0.155], [0.5, 0.160], [0.68, 0.125], [0.84, 0.075], [0.94, 0.048], [1, 0.040]],
-    hw: 1.08, belly: 0.55, dy: 0.015,
+    label: 'Corydoras', count: 2, L: 0.050, hbox: 0.042, ltot: 1.28,
+    // ~3.5:1 arched back, blunt snout, wide armour
+    stations: [
+      [0.00, 0.000, 0.55, 0.70],
+      [0.03, 0.055, 0.85, 0.55],
+      [0.08, 0.095, 1.15, 0.50],
+      [0.16, 0.135, 1.25, 0.48], // cheek/operculum wide
+      [0.32, 0.165, 1.18, 0.52],
+      [0.50, 0.170, 1.10, 0.55], // arched peak
+      [0.68, 0.135, 0.95, 0.58],
+      [0.84, 0.080, 0.75, 0.65],
+      [0.94, 0.048, 0.58, 0.75],
+      [1.00, 0.036, 0.48, 0.85],
+    ],
+    dy: 0.012,
     caudal: { len: 0.24, spread: 0.13, notch: 0.68 },
-    dorsal: { t0: 0.30, t1: 0.46, h: 0.18, sweep: 0.14 },
-    anal: { t0: 0.6, t1: 0.72, h: 0.06, sweep: 0.05 },
-    pect: { t: 0.26, len: 0.17, w: 0.07 },
+    dorsal: { t0: 0.28, t1: 0.48, h: 0.22, sweep: 0.16 }, // spiky
+    anal: { t0: 0.58, t1: 0.74, h: 0.07, sweep: 0.05 },
+    adipose: { t0: 0.72, t1: 0.86, h: 0.06, sweep: 0.05 },
+    pect: { t: 0.24, len: 0.18, w: 0.075 },
     barbels: true,
-    speed: 0.035, turn: 2.0, school: 0.8, yPref: [0.0, 0.03], iri: 0.05, emissive: 0.0, bottom: true,
+    eye: { t: 0.12, y: 0.042, r: 0.048 },
+    scale: 'scute',
+    speed: 0.035, turn: 2.0, school: 0.8, yPref: [0.0, 0.03], iri: 0.06, emissive: 0.0, bottom: true,
     dispersion: 0.0,
   },
 };
+
+
+// legacy hy accessor for paintSkin silhouette (derived from stations)
+for (const sp of Object.values(SPECIES)) {
+  sp.hy = sp.stations.map(([t, hy]) => [t, hy]);
+  sp.hw = sp.stations[Math.floor(sp.stations.length / 2)][2];
+  sp.belly = sp.stations[Math.floor(sp.stations.length / 2)][3];
+}
 
 function prof(pts, t) {
   if (t <= pts[0][0]) return pts[0][1];
@@ -68,73 +129,46 @@ function prof(pts, t) {
   return pts[pts.length - 1][1];
 }
 
-function pushEyeDome(bp, bt, bf, bs, bd, buv, bi, sp, L, side, eyeT, eyeYFrac, eyeR, eyeU, eyeV) {
-  const zOf = (t) => L / 2 - t * L;
-  const hy = prof(sp.hy, eyeT) * L;
-  const hw = hy * sp.hw;
-  const dy = sp.dy * L;
-  const cx = side * hw * 0.92;
-  const cy = dy + eyeYFrac * L;
-  const cz = zOf(eyeT);
-  const segs = 10, rings = 6;
-  const start = bp.length / 3;
-  // cornea tip (wet specular sampled near painted catchlight)
-  bp.push(cx + side * eyeR * 0.22, cy, cz + eyeR * 0.42);
-  bt.push(eyeT); bf.push(0); bs.push(side); bd.push(0);
-  buv.push(eyeU, eyeV);
-  for (let r = 1; r <= rings; r++) {
-    const pr = (r / rings) * Math.PI * 0.58;
-    const rr = Math.sin(pr) * eyeR;
-    const zz = Math.cos(pr) * eyeR;
-    for (let j = 0; j < segs; j++) {
-      const a = (j / segs) * Math.PI * 2;
-      // slightly elliptical: flatter against body, taller dorsoventrally
-      const rx = rr * (0.55 + 0.45 * Math.abs(Math.cos(a)));
-      const ry = rr * (0.85 + 0.15 * Math.abs(Math.sin(a)));
-      bp.push(cx + Math.cos(a) * rx * side * 0.28 + side * rr * 0.72, cy + Math.sin(a) * ry, cz + zz * 0.5 + eyeR * 0.22);
-      bt.push(eyeT); bf.push(0); bs.push(side); bd.push(0);
-      const catchL = Math.max(0, Math.sin(a) * 0.4 + Math.cos(pr) * 0.25);
-      // outer rings sample sclera UV ring; inner → pupil
-      const uOff = (r / rings) * 0.018;
-      buv.push(eyeU - catchL * 0.014 * side + uOff * side * 0.3, eyeV - catchL * 0.012 + (r / rings) * 0.01);
+/** Interpolate station [t, hy, hwMul, belly] */
+function stationAt(stations, t) {
+  if (t <= stations[0][0]) return { hy: stations[0][1], hw: stations[0][2], belly: stations[0][3] };
+  for (let i = 1; i < stations.length; i++) {
+    if (t <= stations[i][0]) {
+      const a = stations[i - 1], b = stations[i];
+      const k = (t - a[0]) / (b[0] - a[0]);
+      const s = k * k * (3 - 2 * k);
+      return {
+        hy: a[1] + (b[1] - a[1]) * s,
+        hw: a[2] + (b[2] - a[2]) * s,
+        belly: a[3] + (b[3] - a[3]) * s,
+      };
     }
   }
-  for (let j = 0; j < segs; j++) {
-    const a = start + 1 + j, b = start + 1 + (j + 1) % segs;
-    bi.push(start, a, b);
-  }
-  for (let r = 0; r < rings - 1; r++) {
-    for (let j = 0; j < segs; j++) {
-      const a = start + 1 + r * segs + j;
-      const b = start + 1 + r * segs + (j + 1) % segs;
-      const c = start + 1 + (r + 1) * segs + j;
-      const d = start + 1 + (r + 1) * segs + (j + 1) % segs;
-      bi.push(a, c, b, b, c, d);
-    }
-  }
+  const last = stations[stations.length - 1];
+  return { hy: last[1], hw: last[2], belly: last[3] };
 }
 
 function pushBarbels(bp, bt, bf, bs, bd, buv, bi, sp, L) {
-  // short tapered strips near the mouth (part of body mesh)
   const zOf = (t) => L / 2 - t * L;
   const dy = sp.dy * L;
-  const hy0 = prof(sp.hy, 0.04) * L;
-  const rows = 4, cols = 3;
+  const st = stationAt(sp.stations, 0.04);
+  const hy0 = st.hy * L;
+  const rows = 5, cols = 3;
   for (const side of [-1, 1]) {
     for (const tier of [0, 1]) {
       const start = bp.length / 3;
-      const y0 = dy - hy0 * (0.15 + tier * 0.22);
-      const z0 = zOf(0.02);
+      const y0 = dy - hy0 * (0.12 + tier * 0.24);
+      const z0 = zOf(0.015);
       for (let r = 0; r <= rows; r++) {
         const u = r / rows;
         const taper = 1 - u * 0.92;
-        const len = L * (0.11 + tier * 0.03);
-        const droop = u * u * L * 0.04;
+        const len = L * (0.12 + tier * 0.04);
+        const droop = u * u * L * 0.045;
         for (let c = 0; c <= cols; c++) {
           const v = c / cols;
-          const w = L * 0.006 * taper * (0.4 + 0.6 * Math.sin(v * Math.PI));
-          const x = side * (hy0 * sp.hw * 0.55 + u * len * 0.55 + (v - 0.5) * w);
-          const y = y0 - droop - u * L * 0.02;
+          const w = L * 0.007 * taper * (0.4 + 0.6 * Math.sin(v * Math.PI));
+          const x = side * (hy0 * st.hw * 0.55 + u * len * 0.55 + (v - 0.5) * w);
+          const y = y0 - droop - u * L * 0.022;
           const z = z0 + u * len * 0.85 - (v - 0.5) * w * 0.3;
           bp.push(x, y, z);
           bt.push(0.02 + u * 0.08); bf.push(0); bs.push(side); bd.push(u);
@@ -149,62 +183,55 @@ function pushBarbels(bp, bt, bf, bs, bd, buv, bi, sp, L) {
   }
 }
 
-/** Build indexed geometry: body + fins, with per-vertex attributes aT/aFin/aSide/aDist */
-export function buildFishGeometry(sp, seg = 32, ring = 14) {
+/** Build indexed geometry: body + fins + eye layout */
+export function buildFishGeometry(sp, seg = 48, ring = 20) {
   const L = sp.L;
   const Ltot = L * sp.ltot;
   const Hbox = sp.hbox;
   const uvOf = (x, y, z) => [(L / 2 - z) / Ltot, 0.5 + y / Hbox];
   const zOf = (t) => L / 2 - t * L;
-  const hyOf = (t) => prof(sp.hy, t) * L;
   const dyOf = () => sp.dy * L;
+  const key = Object.keys(SPECIES).find((k) => SPECIES[k] === sp) || 'neon';
 
-  // ---- body (fin types: 0) — snout pinch, lip notch, operculum flare
   const bp = [], bt = [], bf = [], bs = [], bd = [], buv = [], bi = [];
   for (let i = 0; i <= seg; i++) {
     const t = i / seg;
+    const st = stationAt(sp.stations, t);
     const z = zOf(t);
-    let hy = hyOf(t), hw = hy * sp.hw;
-    // blunt/pointed snout per species + slight mouth cleft on lower lip
-    const snout = t < 0.12 ? (1.0 - Math.pow(1.0 - t / 0.12, 1.6) * 0.22) : 1.0;
-    hy *= snout; hw *= snout * (t < 0.06 ? 0.92 : 1.0);
-    // operculum (gill plate) lateral bulge ~15–28% along body
-    const gill = Math.exp(-Math.pow((t - 0.20) / 0.055, 2)) * 0.14;
-    hw *= 1.0 + gill;
+    const hy = st.hy * L;
+    const hw = hy * st.hw;
+    const gillCrest = Math.exp(-Math.pow((t - 0.18) / 0.04, 2));
     for (let j = 0; j < ring; j++) {
       const a = (j / ring) * Math.PI * 2;
       const sy = Math.sin(a);
       const cx = Math.cos(a);
-      // mouth notch: lower-front verts pull inward
-      const mouth = (t < 0.05 && sy < -0.15) ? (1.0 - (0.05 - t) / 0.05 * (-sy) * 0.35) : 1.0;
-      const x = cx * hw * mouth;
-      const y = dyOf() + (sy >= 0 ? sy * hy : sy * hy * sp.belly) * mouth;
-      // soft lip ridge just above mouth line
-      const lip = (t < 0.04 && Math.abs(sy + 0.25) < 0.18) ? L * 0.0035 : 0;
-      bp.push(x, y + lip, z + (t < 0.03 ? L * 0.004 * (1 - t / 0.03) : 0));
-      bt.push(t); bf.push(0); bs.push(0); bd.push(0);
+      const pExp = key === 'cory' ? 2.6 : key === 'angel' ? 2.15 : 2.0;
+      const rx = Math.sign(cx) * Math.pow(Math.abs(cx), 2 / pExp);
+      const ry = Math.sign(sy) * Math.pow(Math.abs(sy), 2 / pExp);
+      let mouth = 1.0;
+      if (t < 0.06 && sy < -0.1) mouth = 1.0 - (0.06 - t) / 0.06 * (-sy) * 0.45;
+      const snoutZ = t < 0.05 ? (key === 'cory' ? 0.006 : 0.004) * L * (1 - t / 0.05) : 0;
+      let gillPush = 0;
+      if (Math.abs(cx) > 0.55 && t > 0.12 && t < 0.28) {
+        gillPush = gillCrest * L * 0.006 * Math.abs(cx);
+      }
+      let pectBump = 0;
+      if (sp.pect && Math.abs(t - sp.pect.t) < 0.04 && sy < -0.1 && Math.abs(cx) > 0.4) {
+        pectBump = (1 - Math.abs(t - sp.pect.t) / 0.04) * L * 0.0045 * Math.abs(cx);
+      }
+      const yScale = sy >= 0 ? 1.0 : st.belly;
+      const ridge = sy > 0.75 ? 1.0 + (sy - 0.75) * 0.15 : 1.0;
+      const x = (rx * hw + Math.sign(cx || 1) * (gillPush + pectBump)) * mouth;
+      const y = dyOf() + ry * hy * yScale * ridge * mouth;
+      const lip = (t < 0.045 && Math.abs(sy + 0.3) < 0.2) ? L * 0.004 : 0;
+      bp.push(x, y + lip, z + snoutZ);
+      bt.push(t); bf.push(0); bs.push(cx > 0.2 ? 1 : cx < -0.2 ? -1 : 0); bd.push(0);
       buv.push(...uvOf(x, y, z));
     }
   }
   for (let i = 0; i < seg; i++) for (let j = 0; j < ring; j++) {
     const a = i * ring + j, b = i * ring + (j + 1) % ring, c = (i + 1) * ring + j, d = (i + 1) * ring + (j + 1) % ring;
     bi.push(a, c, b, b, c, d);
-  }
-
-  // eye domes (slight protrusion, dark cornea via UV)
-  const eyeSpec = {
-    neon: [0.085, 0.02, 0.038],
-    platy: [0.09, 0.028, 0.036],
-    angel: [0.09, 0.085, 0.042],
-    cory: [0.11, 0.038, 0.034],
-  };
-  const key = Object.keys(SPECIES).find((k) => SPECIES[k] === sp) || 'neon';
-  const es = eyeSpec[key] || eyeSpec.neon;
-  // match body uvOf (v grows with +Y); canvas flipY aligns with painted eye
-  const eyeU = (es[0] * L / Ltot);
-  const eyeV = 0.5 + (sp.dy * L + es[1] * L) / Hbox;
-  for (const side of [-1, 1]) {
-    pushEyeDome(bp, bt, bf, bs, bd, buv, bi, sp, L, side, es[0], es[1], es[2] * L, eyeU, eyeV);
   }
   if (sp.barbels) pushBarbels(bp, bt, bf, bs, bd, buv, bi, sp, L);
 
@@ -218,28 +245,31 @@ export function buildFishGeometry(sp, seg = 32, ring = 14) {
   body.setIndex(bi);
   body.computeVertexNormals();
 
-  // ---- fins — denser grids, curved trailing edges
-  // Angel median fins get a tiny ±X slab so grazing angles stay opaque (not paper-thin ghosts).
-  const angelThick = sp === SPECIES.angel ? 0.018 * L : 0;
+  const angelThick = sp === SPECIES.angel ? 0.02 * L : 0;
   const fp = [], ft = [], ff = [], fs = [], fd = [], fuv = [], fi = [];
-  const gridFin = (baseFn, outerFn, rows, cols, type, side = 0, curve = 0.18, thick = 0) => {
+  const hyOf = (t) => stationAt(sp.stations, t).hy * L;
+  const gridFin = (baseFn, outerFn, rows, cols, type, side = 0, curve = 0.18, thick = 0, rayAmp = 0.0) => {
     const layers = thick > 0 ? [-1, 1] : [0];
     for (const sx of layers) {
       const start = fp.length / 3;
       for (let r = 0; r <= rows; r++) {
         const s = r / rows;
-        const b = baseFn(s), o = outerFn(s);
+        const b0 = baseFn(s), o0 = outerFn(s);
         for (let c = 0; c <= cols; c++) {
           const k = c / cols;
-          // ease toward tip + soft lateral bow so edges aren't hard triangles
           const ke = k * k * (3 - 2 * k);
           const bow = Math.sin(k * Math.PI) * curve * (0.35 + 0.65 * Math.sin(s * Math.PI));
-          const x = b[0] + (o[0] - b[0]) * ke + sx * thick * (1 - ke * 0.55);
-          const y = b[1] + (o[1] - b[1]) * ke + bow * (type === 1 ? (s * 2 - 1) * 0.002 : 0);
-          const z = b[2] + (o[2] - b[2]) * ke;
-          // round the trailing free edge slightly inward at corners
-          const edgeSoft = (c === cols ? 0.92 + 0.08 * Math.sin(s * Math.PI) : 1);
-          fp.push(x * edgeSoft + b[0] * (1 - edgeSoft), y, z);
+          const ray = rayAmp * Math.sin(s * Math.PI * Math.max(3, cols * 0.55)) * ke * (1 - ke * 0.3);
+          let x = b0[0] + (o0[0] - b0[0]) * ke + sx * thick * (1 - ke * 0.55) + ray * (side || (sx || 0.001));
+          let y = b0[1] + (o0[1] - b0[1]) * ke + bow * (type === 1 ? (s * 2 - 1) * 0.002 : 0);
+          let z = b0[2] + (o0[2] - b0[2]) * ke;
+          if (ke > 0.82 && type === 1) {
+            const fork = (s - 0.5) * 2;
+            y += fork * L * 0.012 * (ke - 0.82) / 0.18;
+          }
+          const edgeSoft = (c === cols ? 0.90 + 0.10 * Math.sin(s * Math.PI) : 1);
+          x = x * edgeSoft + b0[0] * (1 - edgeSoft);
+          fp.push(x, y, z);
           ft.push((L / 2 - z) / L); ff.push(type); fs.push(side || sx); fd.push(k);
           fuv.push(...uvOf(x, y, z));
         }
@@ -251,7 +281,6 @@ export function buildFishGeometry(sp, seg = 32, ring = 14) {
     }
   };
 
-  // caudal (1): vertical fan behind the peduncle, forked, rounded lobes
   {
     const c = sp.caudal;
     const zb = zOf(1), hy = hyOf(1);
@@ -259,49 +288,60 @@ export function buildFishGeometry(sp, seg = 32, ring = 14) {
       (s) => [0, dyOf() + (s * 2 - 1) * hy * 0.9, zb + 0.002 * L],
       (s) => {
         const yy = (s * 2 - 1);
-        const spread = c.spread * L;
         const lobe = Math.abs(yy);
-        // softer fork + rounded tip
         const notchK = c.notch + (1 - c.notch) * Math.pow(lobe, 0.72);
         const round = 1 - 0.12 * Math.pow(1 - Math.sin(Math.PI * s), 1.6);
-        const z = zb - c.len * L * notchK * round;
-        return [0, dyOf() + yy * spread * (0.92 + 0.08 * Math.sin(Math.PI * s)), z];
+        return [0, dyOf() + yy * c.spread * L * (0.92 + 0.08 * Math.sin(Math.PI * s)), zb - c.len * L * notchK * round];
       },
-      14, 9, 1, 0, 0.22, angelThick
+      16, 10, 1, 0, 0.24, angelThick, L * 0.0012
     );
   }
-  // dorsal (3)
   {
     const d = sp.dorsal;
+    const tipFilament = key === 'angel';
     gridFin(
       (s) => { const t = d.t0 + (d.t1 - d.t0) * s; return [0, dyOf() + hyOf(t) * 0.98, zOf(t)]; },
       (s) => {
         const t = d.t0 + (d.t1 - d.t0) * s;
-        const bump = Math.pow(Math.sin(Math.PI * Math.pow(s, 0.78)), 1.05);
-        const h = d.h * L * (0.10 + 0.90 * bump) * (sp === SPECIES.angel ? (0.35 + 0.65 * Math.pow(s, 0.5) * (1 - 0.3 * s)) : 1);
+        const bump = Math.pow(Math.sin(Math.PI * Math.pow(s, tipFilament ? 0.55 : 0.78)), 1.05);
+        let h = d.h * L * (0.10 + 0.90 * bump);
+        if (tipFilament) h *= 0.30 + 0.70 * Math.pow(s, 0.45) * (1 - 0.25 * s);
+        if (key === 'cory') h *= 0.55 + 0.45 * Math.pow(Math.sin(Math.PI * s), 0.6);
         return [0, dyOf() + hyOf(t) * 0.98 + h, zOf(t) - d.sweep * L * bump * (0.35 + 0.65 * s)];
       },
-      14, 7, 3, 0, 0.14, angelThick
+      16, 8, 3, 0, 0.14, angelThick, L * 0.001
     );
   }
-  // anal (3)
   {
     const d = sp.anal;
     gridFin(
-      (s) => { const t = d.t0 + (d.t1 - d.t0) * s; return [0, dyOf() - hyOf(t) * sp.belly * 0.98, zOf(t)]; },
+      (s) => { const t = d.t0 + (d.t1 - d.t0) * s; return [0, dyOf() - hyOf(t) * stationAt(sp.stations, t).belly * 0.98, zOf(t)]; },
       (s) => {
         const t = d.t0 + (d.t1 - d.t0) * s;
-        const bump = Math.pow(Math.sin(Math.PI * Math.pow(s, 0.78)), 1.05);
-        const h = d.h * L * (0.10 + 0.90 * bump);
-        return [0, dyOf() - hyOf(t) * sp.belly * 0.98 - h, zOf(t) - d.sweep * L * bump * (0.35 + 0.65 * s)];
+        const bump = Math.pow(Math.sin(Math.PI * Math.pow(s, key === 'angel' ? 0.55 : 0.78)), 1.05);
+        let h = d.h * L * (0.10 + 0.90 * bump);
+        if (key === 'angel') h *= 0.30 + 0.70 * Math.pow(s, 0.45);
+        return [0, dyOf() - hyOf(t) * stationAt(sp.stations, t).belly * 0.98 - h, zOf(t) - d.sweep * L * bump * (0.35 + 0.65 * s)];
       },
-      14, 7, 3, 0, 0.14, angelThick
+      16, 8, 3, 0, 0.14, angelThick, L * 0.001
     );
   }
-  // pectorals (2), mirrored — softer paddle outline
+  if (sp.adipose) {
+    const d = sp.adipose;
+    gridFin(
+      (s) => { const t = d.t0 + (d.t1 - d.t0) * s; return [0, dyOf() + hyOf(t) * 0.95, zOf(t)]; },
+      (s) => {
+        const t = d.t0 + (d.t1 - d.t0) * s;
+        const bump = Math.sin(Math.PI * s);
+        return [0, dyOf() + hyOf(t) * 0.95 + d.h * L * bump, zOf(t) - d.sweep * L * bump];
+      },
+      5, 4, 3, 0, 0.08
+    );
+  }
   for (const side of [-1, 1]) {
     const p = sp.pect;
-    const hy0 = hyOf(p.t), hw0 = hy0 * sp.hw;
+    const st = stationAt(sp.stations, p.t);
+    const hy0 = st.hy * L, hw0 = hy0 * st.hw;
     gridFin(
       (s) => {
         const pad = Math.sin(s * Math.PI) * 0.15;
@@ -311,37 +351,25 @@ export function buildFishGeometry(sp, seg = 32, ring = 14) {
         const fan = Math.sin(s * Math.PI);
         return [
           side * (hw0 * 0.9 + p.len * L * (0.55 + 0.35 * fan)),
-          dyOf() - hy0 * 0.40 - fan * 0.012 * L,
+          dyOf() - hy0 * 0.40 - fan * 0.014 * L,
           zOf(p.t) - p.len * L * (0.28 + 0.72 * s),
         ];
       },
-      7, 5, 2, side, 0.2
+      8, 6, 2, side, 0.22, 0, L * 0.0008
     );
   }
-  // neon adipose (tiny soft lobe behind dorsal)
-  if (sp === SPECIES.neon) {
-    gridFin(
-      (s) => { const t = 0.62 + s * 0.08; return [0, dyOf() + hyOf(t) * 0.95, zOf(t)]; },
-      (s) => {
-        const t = 0.62 + s * 0.08;
-        const bump = Math.sin(Math.PI * s);
-        return [0, dyOf() + hyOf(t) * 0.95 + 0.04 * L * bump, zOf(t) - 0.03 * L * bump];
-      },
-      4, 3, 3, 0, 0.08
-    );
-  }
-  // angelfish pelvic streamers
   if (sp.pelvic) {
     for (const side of [-1, 1]) {
       const p = sp.pelvic;
       const hy0 = hyOf(p.t);
       gridFin(
-        (s) => [side * 0.0045, dyOf() - hy0 * 0.85, zOf(p.t) - s * 0.03 * L],
-        (s) => [side * 0.0075, dyOf() - hy0 * 0.85 - p.len * L * (0.35 + 0.65 * (1 - s * 0.4)), zOf(p.t) - 0.22 * L - s * 0.05 * L],
-        5, 5, 3, side, 0.1, angelThick * 0.55
+        (s) => [side * 0.005, dyOf() - hy0 * 0.85, zOf(p.t) - s * 0.03 * L],
+        (s) => [side * 0.008, dyOf() - hy0 * 0.85 - p.len * L * (0.35 + 0.65 * (1 - s * 0.35)), zOf(p.t) - 0.24 * L - s * 0.06 * L],
+        6, 6, 3, side, 0.1, angelThick * 0.5
       );
     }
   }
+
   const fins = new THREE.BufferGeometry();
   fins.setAttribute('position', new THREE.Float32BufferAttribute(fp, 3));
   fins.setAttribute('uv', new THREE.Float32BufferAttribute(fuv, 2));
@@ -351,7 +379,18 @@ export function buildFishGeometry(sp, seg = 32, ring = 14) {
   fins.setAttribute('aDist', new THREE.Float32BufferAttribute(fd, 1));
   fins.setIndex(fi);
   fins.computeVertexNormals();
-  return { body, fins };
+
+  const eye = sp.eye || { t: 0.1, y: 0.03, r: 0.04 };
+  const stE = stationAt(sp.stations, eye.t);
+  const eyeLayout = {
+    t: eye.t,
+    y: dyOf() + eye.y * L,
+    z: zOf(eye.t),
+    r: eye.r * L,
+    xMul: stE.hy * L * stE.hw * 0.92,
+  };
+
+  return { body, fins, eyeLayout };
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -361,16 +400,17 @@ function silhouette(ctx, sp, W, H, fill) {
   const L = sp.L, Ltot = L * sp.ltot, Hbox = sp.hbox;
   const uv = (t, y) => [((L / 2 - (L / 2 - t * L)) / Ltot) * W, (0.5 - y / Hbox) * H];
   ctx.beginPath();
-  const N = 80;
+  const N = 96;
   for (let i = 0; i <= N; i++) {
     const t = i / N;
-    const hy = prof(sp.hy, t) * L;
+    const hy = (sp.stations ? stationAt(sp.stations, t).hy : prof(sp.hy, t)) * L;
     const [x, y] = uv(t, sp.dy * L + hy);
     if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
   }
   for (let i = N; i >= 0; i--) {
     const t = i / N;
-    const hy = prof(sp.hy, t) * L * sp.belly;
+    const st = sp.stations ? stationAt(sp.stations, t) : null;
+    const hy = (st ? st.hy : prof(sp.hy, t)) * L * (st ? st.belly : sp.belly);
     const [x, y] = uv(t, sp.dy * L - hy);
     ctx.lineTo(x, y);
   }
@@ -386,12 +426,85 @@ function scalePattern(ctx, sp, W, H, alpha, size) {
   ctx.clip();
   ctx.strokeStyle = `rgba(255,255,255,${alpha})`;
   ctx.lineWidth = 1;
-  for (let y = 0; y < H; y += size * 0.62) {
-    for (let x = (Math.round(y / (size * 0.62)) % 2) * size * 0.5; x < W; x += size) {
-      ctx.beginPath(); ctx.arc(x, y, size * 0.55, -0.2, Math.PI * 0.62); ctx.stroke();
+  const kind = sp.scale || 'med';
+  const rowH = kind === 'fine' ? size * 0.45 : kind === 'large' ? size * 0.9 : kind === 'scute' ? size * 1.1 : size * 0.62;
+  for (let y = 0; y < H; y += rowH) {
+    const odd = Math.round(y / rowH) % 2;
+    for (let x = odd * size * 0.5; x < W; x += size) {
+      if (kind === 'scute') {
+        // two lateral armour rows — rectangular scutes
+        ctx.strokeStyle = `rgba(40,30,18,${alpha * 1.4})`;
+        ctx.strokeRect(x, y, size * 0.85, rowH * 0.7);
+      } else {
+        ctx.beginPath(); ctx.arc(x, y, size * 0.55, -0.2, Math.PI * 0.62); ctx.stroke();
+      }
     }
   }
   ctx.restore();
+}
+
+/** Bake a scale-row normal map (tangent-space-ish encoded as RGB). */
+function makeScaleNormal(key, sp, W = 512, H = 256) {
+  const c = makeCanvas(W, H);
+  const ctx = c.getContext('2d');
+  const img = ctx.createImageData(W, H);
+  const kind = sp.scale || 'med';
+  const rowH = kind === 'fine' ? 4 : kind === 'large' ? 10 : kind === 'scute' ? 12 : 7;
+  const colW = kind === 'fine' ? 5 : kind === 'large' ? 12 : kind === 'scute' ? 14 : 8;
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const i = (y * W + x) * 4;
+      const u = x / W, v = y / H;
+      // only inside silhouette approx via vertical body band
+      let nx = 0, ny = 0;
+      if (kind === 'scute') {
+        const row = Math.floor(y / rowH), col = Math.floor(x / colW);
+        const lx = (x % colW) / colW, ly = (y % rowH) / rowH;
+        nx = (lx - 0.5) * 1.6;
+        ny = (ly - 0.5) * 1.2;
+        // two lateral rows emphasis (mid flanks)
+        if (Math.abs(v - 0.5) > 0.28) { nx *= 0.25; ny *= 0.25; }
+      } else {
+        const row = y / rowH;
+        const odd = Math.floor(row) % 2;
+        const lx = ((x + odd * colW * 0.5) % colW) / colW;
+        const ly = (y % rowH) / rowH;
+        // cycloid bump: raised leading edge
+        const bump = Math.sin(lx * Math.PI) * Math.sin(ly * Math.PI);
+        nx = Math.cos(lx * Math.PI) * 0.9;
+        ny = Math.cos(ly * Math.PI) * 0.55 * bump;
+      }
+      const nz = 1.0;
+      const len = Math.hypot(nx, ny, nz) || 1;
+      img.data[i] = ((nx / len) * 0.5 + 0.5) * 255;
+      img.data[i + 1] = ((ny / len) * 0.5 + 0.5) * 255;
+      img.data[i + 2] = ((nz / len) * 0.5 + 0.5) * 255;
+      img.data[i + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  return canvasTexture(c, { srgb: false, aniso: 4 });
+}
+
+/** Sphere-mapped eye texture: sclera, iris, pupil, cornea highlight. */
+export function makeEyeMap(iris = '#c8d2d8') {
+  const S = 128;
+  const c = makeCanvas(S, S);
+  const ctx = c.getContext('2d');
+  const g = ctx.createRadialGradient(S * 0.46, S * 0.44, S * 0.05, S * 0.5, S * 0.5, S * 0.5);
+  g.addColorStop(0, '#050508');
+  g.addColorStop(0.22, '#050508');
+  g.addColorStop(0.28, iris);
+  g.addColorStop(0.48, iris);
+  g.addColorStop(0.62, '#eef2f5');
+  g.addColorStop(1, '#d8dee4');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, S, S);
+  ctx.fillStyle = 'rgba(255,255,255,0.95)';
+  ctx.beginPath(); ctx.arc(S * 0.34, S * 0.32, S * 0.09, 0, 6.3); ctx.fill();
+  ctx.fillStyle = 'rgba(200,220,255,0.45)';
+  ctx.beginPath(); ctx.arc(S * 0.62, S * 0.58, S * 0.04, 0, 6.3); ctx.fill();
+  return canvasTexture(c, { repeat: false, aniso: 2 });
 }
 
 function eye(ctx, sp, W, H, tx, ty, r, ring) {
@@ -501,7 +614,7 @@ function paintFinRays(ctx, sp, W, H, key, px, py) {
 }
 
 function bodyBaseColor(key) {
-  return { neon: '#9aa89a', platy: '#ff8a30', angel: '#e8e6e0', cory: '#c4a574' }[key];
+  return { neon: '#8fa08c', platy: '#ff7a1a', angel: '#f0ece4', cory: '#c9a878' }[key];
 }
 
 export function paintSkin(key, sp) {
@@ -633,9 +746,20 @@ export function paintSkin(key, sp) {
     }
     ctx.restore();
 
-    // eye (both flanks share planar UV)
-    const eyeSpec = { neon: [0.085, 0.02, 18, '#c8d2d8'], platy: [0.09, 0.03, 15, '#e6c890'], angel: [0.09, 0.09, 16, '#d94a2a'], cory: [0.11, 0.04, 14, '#c9b08a'] }[key];
-    eye(ctx, sp, W, H, eyeSpec[0], eyeSpec[1], eyeSpec[2], eyeSpec[3]);
+    // orbital socket recess (real eye spheres sit on top)
+    const eyeSpec = { neon: [0.10, 0.025, 14], platy: [0.11, 0.032, 12], angel: [0.12, 0.095, 14], cory: [0.12, 0.042, 11] }[key];
+    {
+      const L = sp.L, Ltot = sp.L * sp.ltot;
+      const x = (eyeSpec[0] * L / Ltot) * W;
+      const y = (0.5 - (sp.dy * L + eyeSpec[1] * L) / sp.hbox) * H;
+      const r = eyeSpec[2];
+      const g = ctx.createRadialGradient(x, y, r * 0.2, x, y, r * 1.6);
+      g.addColorStop(0, 'rgba(8,6,5,0.92)');
+      g.addColorStop(0.55, 'rgba(20,16,12,0.55)');
+      g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(x, y, r * 1.55, 0, Math.PI * 2); ctx.fill();
+    }
   };
 
   paintBodyInto(bctx);
@@ -726,5 +850,9 @@ export function paintSkin(key, sp) {
   bodyMap.wrapS = bodyMap.wrapT = THREE.ClampToEdgeWrapping;
   const map = canvasTexture(fc, { repeat: false, aniso: 4 });
   map.wrapS = map.wrapT = THREE.ClampToEdgeWrapping;
-  return { map, bodyMap, emissive, metalness, roughness };
+  const normal = makeScaleNormal(key, sp);
+  normal.wrapS = normal.wrapT = THREE.ClampToEdgeWrapping;
+  const eyeIris = { neon: '#a8c0d0', platy: '#e6c890', angel: '#d94a2a', cory: '#c9b08a' }[key];
+  const eyeMap = makeEyeMap(eyeIris);
+  return { map, bodyMap, emissive, metalness, roughness, normal, eyeMap };
 }

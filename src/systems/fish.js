@@ -8,7 +8,7 @@ import { Q } from '../core/quality.js';
 const VERT_DECL = `attribute float aT; attribute float aFin; attribute float aSide; attribute float aDist;
 attribute float iPhase; attribute float iAmp; attribute float iBend; attribute float iFlap;`;
 
-/** GPU swimming: S-curve + idle sway, turn-bend, pectoral flap, fin ripples. */
+/** GPU swimming: S-curve + head yaw counter, gill breath, pecs, fin ripples. */
 function fishVertex(L) {
   return (vs) =>
     vs
@@ -20,27 +20,39 @@ function fishVertex(L) {
           float tt = clamp(aT, 0.0, 1.5);
           float ampT = 0.08 + 0.92 * pow(tt, 2.05);
           // travelling wave (stronger toward tail)
-          float lat = sin(iPhase - tt * 5.0) * ampT * iAmp * L_ * 0.12;
+          float wave = sin(iPhase - tt * 5.0) * ampT * iAmp * L_ * 0.12;
+          // head counter-yaw: opposite phase, fades by mid-body
+          float head = (1.0 - smoothstep(0.0, 0.42, tt));
+          float yawOpp = -sin(iPhase - 0.15) * head * iAmp * L_ * 0.028;
           // gentle constant S-curve that scales with swim amp / speed (readable in stills)
           float scurve = sin(tt * 6.2831853) * (0.06 + iAmp * 0.12) * L_;
           // idle sway even at low amp
           float idle = sin(iPhase * 0.37 - tt * 2.4) * (0.035 + iAmp * 0.04) * L_;
-          lat += scurve + idle;
+          float lat = wave + scurve + idle + yawOpp;
           // C-bend from turns / startle (stronger factor so tap reads in stills)
           lat += iBend * pow(tt, 1.35) * L_ * 0.95;
           transformed.x += lat;
           transformed.x -= sin(iPhase - 0.3) * (1.0 - min(tt, 1.0)) * iAmp * L_ * 0.010;
+          // operculum breathing — slight lateral push near gill cover
+          if (aFin < 0.5) {
+            float gillBand = exp(-pow((tt - 0.18) / 0.045, 2.0)) * abs(aSide);
+            float breath = 0.5 + 0.5 * sin(iPhase * 0.55 + aSide * 0.8);
+            transformed.x += aSide * gillBand * breath * L_ * 0.0045;
+          }
           if (aFin > 1.5 && aFin < 2.5) {
-            // pectorals: calm delicate flutter; iFlap carries panic flare via rate/amp upstream
-            float fl = 0.5 + 0.5 * sin(iFlap + aSide * 0.5);
+            // pectorals: calm delicate flutter; per-ray phase lag via aDist
+            float fl = 0.5 + 0.5 * sin(iFlap + aSide * 0.5 + aDist * 1.8);
             float flare = 0.55 + 0.45 * clamp(iAmp, 0.0, 1.8);
             transformed.x += aSide * aDist * fl * L_ * 0.11 * flare;
             transformed.z -= aDist * (1.0 - fl) * L_ * 0.035;
             transformed.y += aDist * (fl - 0.4) * L_ * 0.035;
           } else if (aFin > 2.5) {
-            transformed.x += sin(iPhase * 0.55 - tt * 6.5 + aDist * 3.0) * aDist * L_ * 0.040 * (0.35 + iAmp);
+            // dorsal/anal/pelvic: phase-lagged ray flutter
+            float ray = sin(iPhase * 0.55 - tt * 6.5 + aDist * 4.2) * aDist;
+            transformed.x += ray * L_ * 0.042 * (0.35 + iAmp);
+            transformed.y += sin(iPhase * 0.4 + aDist * 2.5) * aDist * L_ * 0.012 * (0.3 + iAmp * 0.4);
           } else if (aFin > 0.5) {
-            transformed.x += sin(iPhase - tt * 5.5 - aDist * 2.0) * aDist * L_ * 0.045 * iAmp;
+            transformed.x += sin(iPhase - tt * 5.5 - aDist * 2.4) * aDist * L_ * 0.048 * iAmp;
           }
         }`
       );
@@ -50,29 +62,34 @@ function makeMaterial(key, sp, tex, isFin) {
   const isAngel = key === 'angel';
   const isNeon = key === 'neon';
   const isPlaty = key === 'platy';
-  const mat = new THREE.MeshPhysicalMaterial({
+  const matOpts = {
     map: isFin ? tex.map : (tex.bodyMap || tex.map),
-    roughness: isFin ? (isAngel ? 0.42 : 0.55) : (isAngel ? 0.52 : isPlaty ? 0.30 : 0.38),
-    metalness: isFin ? 0.0 : (isNeon ? 0.42 : isPlaty ? 0.28 : 0.02),
+    roughness: isFin ? (isAngel ? 0.38 : 0.50) : (isAngel ? 0.48 : isPlaty ? 0.28 : 0.34),
+    metalness: isFin ? 0.0 : (isNeon ? 0.48 : isPlaty ? 0.30 : 0.04),
     metalnessMap: !isFin && tex.metalness ? tex.metalness : null,
     roughnessMap: !isFin && tex.roughness ? tex.roughness : null,
-    clearcoat: isFin ? 0.0 : (isAngel ? 0.12 : isPlaty ? 0.42 : isNeon ? 0.28 : 0.28),
-    clearcoatRoughness: isAngel ? 0.55 : isNeon ? 0.32 : 0.34,
+    clearcoat: isFin ? 0.0 : (isAngel ? 0.22 : isPlaty ? 0.48 : isNeon ? 0.35 : 0.32),
+    clearcoatRoughness: isAngel ? 0.42 : isNeon ? 0.28 : 0.30,
     iridescence: isFin ? 0 : sp.iri,
-    iridescenceIOR: 1.6,
-    iridescenceThicknessRange: isNeon ? [80, 320] : [180, 560],
-    sheen: isPlaty && !isFin ? 0.75 : 0,
-    sheenRoughness: 0.32,
-    sheenColor: isPlaty ? new THREE.Color(1.0, 0.5, 0.18) : new THREE.Color(0, 0, 0),
+    iridescenceIOR: 1.55,
+    iridescenceThicknessRange: isNeon ? [60, 280] : [160, 520],
+    sheen: !isFin && (isPlaty || isNeon) ? (isPlaty ? 0.85 : 0.35) : 0,
+    sheenRoughness: 0.28,
+    sheenColor: isPlaty ? new THREE.Color(1.0, 0.45, 0.15) : isNeon ? new THREE.Color(0.3, 0.7, 0.95) : new THREE.Color(0, 0, 0),
     emissive: 0x000000,
     emissiveMap: null,
     emissiveIntensity: 0,
-    side: isFin ? THREE.DoubleSide : THREE.DoubleSide,
+    side: THREE.DoubleSide,
     transparent: isFin,
-    opacity: isFin ? (key === 'angel' ? 0.92 : 0.88) : 1,
-    depthWrite: isFin ? isAngel : !isFin,
-    alphaTest: isFin && isAngel ? 0.04 : 0,
-  });
+    opacity: isFin ? (key === 'angel' ? 0.90 : 0.86) : 1,
+    depthWrite: isFin ? false : !isFin,
+    alphaTest: isFin && isAngel ? 0.02 : 0,
+  };
+  if (!isFin && tex.normal) {
+    matOpts.normalMap = tex.normal;
+    matOpts.normalScale = new THREE.Vector2(isNeon ? 0.55 : isAngel ? 0.85 : 0.7, isNeon ? 0.55 : isAngel ? 0.85 : 0.7);
+  }
+  const mat = new THREE.MeshPhysicalMaterial(matOpts);
   // body must stay opaque regardless of map alpha
   if (!isFin) {
     mat.transparent = false;
@@ -81,7 +98,7 @@ function makeMaterial(key, sp, tex, isFin) {
     mat.alphaMap = null;
   }
   return patchWater(mat, {
-    key: `fish-${key}-${isFin ? 'f' : 'b'}v8`,
+    key: `fish-${key}-${isFin ? 'f' : 'b'}v9`,
     vertex: fishVertex(sp.L),
     soft: isAngel ? 0.55 : 0.4,
     onShader: isFin
@@ -140,6 +157,42 @@ function makeMaterial(key, sp, tex, isFin) {
   });
 }
 
+function makeScleraMaterial(key) {
+  // most aquarium fish show little white sclera; keep it dark/ambient
+  const col = { neon: 0x1a2830, platy: 0x2a2218, angel: 0x2c2824, cory: 0x3a3228 }[key] || 0x222018;
+  return new THREE.MeshPhysicalMaterial({
+    color: col,
+    roughness: 0.28,
+    metalness: 0.05,
+    clearcoat: 1.0,
+    clearcoatRoughness: 0.05,
+  });
+}
+
+function makeIrisMaterial(hex) {
+  return new THREE.MeshStandardMaterial({
+    color: hex,
+    roughness: 0.55,
+    metalness: 0.05,
+  });
+}
+
+function makePupilMaterial() {
+  return new THREE.MeshStandardMaterial({
+    color: 0x050508,
+    roughness: 0.4,
+    metalness: 0.0,
+  });
+}
+
+function makeSocketMaterial(hex = 0x1a1612) {
+  return new THREE.MeshStandardMaterial({
+    color: hex,
+    roughness: 0.78,
+    metalness: 0.05,
+  });
+}
+
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
 
 export function createFish(scene, { scenery, food, water, onEvent }) {
@@ -153,11 +206,11 @@ export function createFish(scene, { scenery, food, water, onEvent }) {
 
   for (const [key, sp] of Object.entries(SPECIES)) {
     const n = sp.count;
-    // smoother silhouettes on high; low tier keeps Q caps for phone cost
+    // 4× denser loft on high; low tier keeps Q caps for phone cost
     const hi = Q.name !== 'low';
-    const seg = Math.max(Q.fishSeg, hi ? (key === 'angel' || key === 'neon' ? 44 : key === 'platy' ? 38 : 34) : Q.fishSeg);
-    const ring = Math.max(Q.fishRing, hi ? (key === 'angel' || key === 'neon' ? 20 : 16) : Q.fishRing);
-    const { body, fins } = buildFishGeometry(sp, seg, ring);
+    const seg = Math.max(Q.fishSeg, hi ? (key === 'angel' || key === 'neon' ? 64 : key === 'platy' ? 56 : 52) : Q.fishSeg);
+    const ring = Math.max(Q.fishRing, hi ? (key === 'angel' || key === 'neon' ? 32 : 28) : Q.fishRing);
+    const { body, fins, eyeLayout } = buildFishGeometry(sp, seg, ring);
     const attrs = {
       iPhase: new THREE.InstancedBufferAttribute(new Float32Array(n), 1),
       iAmp: new THREE.InstancedBufferAttribute(new Float32Array(n), 1),
@@ -173,8 +226,33 @@ export function createFish(scene, { scenery, food, water, onEvent }) {
     bodyMesh.castShadow = true;
     bodyMesh.frustumCulled = finMesh.frustumCulled = false;
     finMesh.renderOrder = 2;
-    group.add(bodyMesh, finMesh);
-    species[key] = { sp, bodyMesh, finMesh, attrs };
+
+    // layered eye: sclera sphere + iris disc + pupil + orbital ring
+    const irisHex = { neon: 0x6a8494, platy: 0xb89050, angel: 0xa83820, cory: 0x8a7050 }[key];
+    const eyeR = eyeLayout.r * (key === 'neon' ? 0.78 : 0.88);
+    const scleraGeo = new THREE.SphereGeometry(eyeR, hi ? 12 : 8, hi ? 10 : 8);
+    const irisGeo = new THREE.CircleGeometry(eyeR * 0.72, hi ? 16 : 10);
+    const pupilGeo = new THREE.SphereGeometry(eyeR * 0.32, 8, 6);
+    const scleraMesh = new THREE.InstancedMesh(scleraGeo, makeScleraMaterial(key), n * 2);
+    const irisMesh = new THREE.InstancedMesh(irisGeo, makeIrisMaterial(irisHex), n * 2);
+    const pupilMesh = new THREE.InstancedMesh(pupilGeo, makePupilMaterial(), n * 2);
+    for (const m of [scleraMesh, irisMesh, pupilMesh]) {
+      m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      m.frustumCulled = false;
+      m.renderOrder = 3;
+    }
+    const sockR = eyeR * 1.18;
+    const sockGeo = new THREE.TorusGeometry(sockR, eyeR * 0.16, hi ? 5 : 4, hi ? 10 : 8);
+    const sockMesh = new THREE.InstancedMesh(sockGeo, makeSocketMaterial(key === 'neon' ? 0x0a2840 : key === 'angel' ? 0x1a1210 : 0x2a2218), n * 2);
+    sockMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    sockMesh.frustumCulled = false;
+    sockMesh.renderOrder = 2;
+
+    group.add(bodyMesh, finMesh, scleraMesh, irisMesh, pupilMesh, sockMesh);
+    species[key] = {
+      sp, bodyMesh, finMesh, scleraMesh, irisMesh, pupilMesh, sockMesh, attrs,
+      eyeLayout: { ...eyeLayout, r: eyeR },
+    };
 
     const cx = (rnd() - 0.5) * 0.5, cy = 0.15 + rnd() * 0.15, cz = (rnd() - 0.5) * 0.2;
     for (let i = 0; i < n; i++) {
@@ -216,6 +294,9 @@ export function createFish(scene, { scenery, food, water, onEvent }) {
   }
 
   const m4 = new THREE.Matrix4(), xa = V(), ya = V(), za = V(), sc = V();
+  const mEye = new THREE.Matrix4(), mIris = new THREE.Matrix4(), mPupil = new THREE.Matrix4(), mSock = new THREE.Matrix4();
+  const eyeWorld = V(), irisPos = V(), pupilPos = V(), sockPos = V();
+  const ex = V(), ey = V(), ez = V();
   const UP = V(0, 1, 0);
   const axis = V(), old = V(), tmp2 = V(), tmp3 = V();
   const bounds = { x0: -0.455, x1: 0.455, z0: -0.165, z1: 0.17, y1: TANK.surfaceY - 0.022 };
@@ -429,6 +510,53 @@ export function createFish(scene, { scenery, food, water, onEvent }) {
     s.attrs.iAmp.array[f.idx] = f.amp;
     s.attrs.iBend.array[f.idx] = f.bend;
     s.attrs.iFlap.array[f.idx] = f.flap;
+
+    // eyes sit in orbital sockets; slight head counter-yaw matches body shader
+    const el = s.eyeLayout;
+    const headYaw = -Math.sin(f.phase - 0.15) * f.amp * f.sp.L * 0.028 * f.size;
+    // nest eye center into the head so sclera reads set-in, not googly
+    const flank = Math.max(el.r * 0.4, el.xMul * (f.key === 'angel' ? 1.05 : 0.95) - el.r * 0.45);
+    for (let side = 0; side < 2; side++) {
+      const sx = side === 0 ? 1 : -1;
+      const ix = f.idx * 2 + side;
+      const lx = (sx * flank + headYaw * 0.12) * f.size;
+      const ly = el.y * f.size;
+      const lz = el.z * f.size;
+      eyeWorld.set(0, 0, 0)
+        .addScaledVector(tmp2, lx)
+        .addScaledVector(tmp3, ly)
+        .addScaledVector(za, lz)
+        .add(f.pos);
+      // outward + slight forward gaze
+      ex.copy(tmp2).multiplyScalar(sx).addScaledVector(za, 0.22).normalize();
+      ez.copy(za).addScaledVector(tmp2, sx * 0.1).normalize();
+      ey.crossVectors(ez, ex).normalize();
+      ex.crossVectors(ey, ez).normalize();
+
+      mEye.makeBasis(ex, ey, ez);
+      mEye.scale(sc);
+      mEye.setPosition(eyeWorld);
+      s.scleraMesh.setMatrixAt(ix, mEye);
+
+      // iris/pupil slightly proud of sclera but still within socket
+      irisPos.copy(eyeWorld).addScaledVector(ex, el.r * f.size * 0.38);
+      mIris.makeBasis(ey, ez, ex);
+      mIris.scale(sc);
+      mIris.setPosition(irisPos);
+      s.irisMesh.setMatrixAt(ix, mIris);
+
+      pupilPos.copy(eyeWorld).addScaledVector(ex, el.r * f.size * 0.52);
+      mPupil.makeBasis(ex, ey, ez);
+      mPupil.scale(sc);
+      mPupil.setPosition(pupilPos);
+      s.pupilMesh.setMatrixAt(ix, mPupil);
+
+      mSock.makeBasis(ey, ez, ex);
+      mSock.scale(sc);
+      sockPos.copy(eyeWorld).addScaledVector(ex, -el.r * f.size * 0.15);
+      mSock.setPosition(sockPos);
+      s.sockMesh.setMatrixAt(ix, mSock);
+    }
   }
 
   /** A tap on the glass: C-start bend hold, divergent flee, flared pecs. */
@@ -481,6 +609,10 @@ export function createFish(scene, { scenery, food, water, onEvent }) {
     for (const k in species) {
       const s = species[k];
       s.bodyMesh.instanceMatrix.needsUpdate = true;
+      s.scleraMesh.instanceMatrix.needsUpdate = true;
+      s.irisMesh.instanceMatrix.needsUpdate = true;
+      s.pupilMesh.instanceMatrix.needsUpdate = true;
+      s.sockMesh.instanceMatrix.needsUpdate = true;
       for (const a in s.attrs) s.attrs[a].needsUpdate = true;
       if (s.bodyMesh.instanceColor) s.bodyMesh.instanceColor.needsUpdate = true;
     }
