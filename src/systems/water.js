@@ -215,7 +215,7 @@ function createRays(renderer) {
     uniforms: {
       ...WU,
       uSteps: { value: Q.rayBands },
-      uRayGain: { value: 1.85 },
+      uRayGain: { value: 2.8 },
       tOccDepth: { value: occRT.texture },
       uOccOn: { value: Q.name === 'high' ? 1.0 : 0.0 },
       uViewProj: { value: viewProj },
@@ -246,35 +246,43 @@ function createRays(renderer) {
           float t = te + (i + jit) * dt;
           vec3 p = ro + rd * t;
           float depth = max(uBoxMax.y - p.y, 0.0);
-          vec2 uv = p.xz * 2.0 + vec2(0.13, 0.31) + vec2(p.y * 0.05, 0.0);
-          float sh = textureLod(uCaust, vec2(uv.x * 0.7, uv.y * 0.15), 2.0).g;
-          float sh2 = textureLod(uCaust, vec2(uv.x * 0.37 + 0.31, uv.y * 0.10), 1.4).g;
-          float shafts = pow(clamp(sh * 0.55 + sh2 * 0.45, 0.0, 3.0), 2.4);
-          float sparse = smoothstep(0.35, 0.85, hash(floor(p.xz * 14.0) + floor(uTime * 0.4)));
-          shafts *= 0.45 + 0.55 * sparse;
-          // depth occlusion: rocks/plants/fish cut the beams
+          // angled shafts from LED bar: slight lean + shimmer
+          float lean = (p.x * 0.35 + sin(uTime * 0.17 + p.z * 2.4) * 0.04) * (depth * 0.55);
+          vec2 uv = vec2(p.x + lean, p.z) * 2.0 + vec2(0.13, 0.31) + vec2(p.y * 0.08, 0.0);
+          float sh = textureLod(uCaust, vec2(uv.x * 0.55, uv.y * 0.11 + uTime * 0.012), 2.2).g;
+          float sh2 = textureLod(uCaust, vec2(uv.x * 0.28 + 0.41, uv.y * 0.08 - uTime * 0.008), 1.6).g;
+          // soft sparse beams — few bright columns against dark tank
+          float beams = clamp(sh * 0.62 + sh2 * 0.48, 0.0, 2.8);
+          float shafts = pow(beams, 1.35);
+          float sparse = smoothstep(0.48, 0.88, hash(floor(vec2(p.x + lean, p.z) * 7.5) + floor(uTime * 0.22)));
+          shafts *= 0.15 + 0.85 * sparse;
+          // shimmer along beam
+          shafts *= 0.82 + 0.18 * sin(uTime * 1.7 + p.y * 18.0 + p.x * 6.0);
+          // depth occlusion: rocks/fish cut the beams
           if (uOccOn > 0.5) {
             vec4 cp = uViewProj * vec4(p, 1.0);
             vec3 ndc = cp.xyz / max(cp.w, 1e-5);
             vec2 suv = ndc.xy * 0.5 + 0.5;
             if (suv.x > 0.0 && suv.x < 1.0 && suv.y > 0.0 && suv.y < 1.0 && abs(ndc.z) < 1.0) {
-              float zd = texture2D(tOccDepth, suv).r; // BasicDepthPacking: 1.0 - fragCoordZ
+              float zd = texture2D(tOccDepth, suv).r;
               float zBuff = 1.0 - zd;
               float zHere = ndc.z * 0.5 + 0.5;
-              float blocked = smoothstep(zHere - 0.004, zHere - 0.012, zBuff);
-              shafts *= mix(1.0, 0.06, blocked);
-              // soft contact darkening just behind occluders
-              trans *= mix(1.0, 0.82, blocked * 0.5);
+              float blocked = smoothstep(zHere - 0.003, zHere - 0.014, zBuff);
+              shafts *= mix(1.0, 0.04, blocked);
+              trans *= mix(1.0, 0.78, blocked * 0.55);
             }
           }
-          float foot = smoothstep(0.55, 0.05, abs(p.x)) * 0.4 + 0.6;
-          float zf = smoothstep(0.24, -0.18, p.z) * 0.35 + 0.65;
-          float lightAmt = exp(-depth * 2.0) * foot * zf;
-          float farHaze = smoothstep(0.05, -0.18, p.z) * 0.35;
-          acc += trans * uScatter * lightAmt * (0.08 + farHaze + 4.4 * shafts) * dt * L;
-          trans *= exp(-dot(uAbsorb, vec3(0.33)) * dt * L * 0.55);
+          // brighter near surface + against dark rear backdrop
+          float nearSurf = exp(-depth * 1.35);
+          float foot = smoothstep(0.52, 0.04, abs(p.x)) * 0.35 + 0.65;
+          float zf = smoothstep(0.22, -0.16, p.z) * 0.55 + 0.55;
+          float lightAmt = nearSurf * foot * zf;
+          float farHaze = smoothstep(0.02, -0.16, p.z) * 0.12;
+          // keep fill low so sparse shafts stay readable
+          acc += trans * uScatter * lightAmt * (0.02 + farHaze + 11.5 * shafts) * dt * L;
+          trans *= exp(-dot(uAbsorb, vec3(0.33)) * dt * L * 0.45);
         }
-        gl_FragColor = vec4(acc * uRayGain * 0.62, 1.0);
+        gl_FragColor = vec4(acc * uRayGain * 0.95, 1.0);
       }`,
   });
   const mesh = new THREE.Mesh(geo, mat);
@@ -382,8 +390,8 @@ function createParticles() {
         float depth = uBoxMax.y - p.y;
         float shaft = textureLod(uCaust, vec2(p.x * 1.4 + 0.13, p.y * 0.1 + p.z * 0.2), 1.8).g;
         // micro-haze mostly inside shafts (not a uniform fog of dots)
-        float shaftPow = pow(clamp(shaft, 0.0, 2.5), 2.1);
-        float lightAmt = exp(-depth * 1.8) * (0.08 + 2.2 * shaftPow);
+        float shaftPow = pow(clamp(shaft, 0.0, 2.5), 1.7);
+        float lightAmt = exp(-depth * 1.5) * (0.10 + 3.4 * shaftPow);
         float tw = 0.6 + 0.4 * sin(t * (0.6 + aSeed.x * 1.5) + aSeed.z * 60.0);
         float edge = smoothstep(0.0, 0.05, min(uBoxMax.x - abs(p.x), uBoxMax.z - abs(p.z)));
         vA = lightAmt * tw * edge * (0.2 + 0.8 * aSeed.y);

@@ -269,10 +269,10 @@ export function createRoom(scene, renderer) {
     patchRoom(new THREE.MeshStandardMaterial({ color: 0x141519, metalness: 0.85, roughness: 0.38, envMap: envTex, envMapIntensity: 0.8 }), { key: 'hous' })
   );
   // cooler, narrower core so bloom keeps a thin hard LED strip instead of a white slab
-  const lipMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.6, 1.85, 2.35), toneMapped: false });
+  const lipMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.85, 2.05, 2.55), toneMapped: false });
   const lip = new THREE.Mesh(new THREE.BoxGeometry(0.82, 0.009, 0.004), lipMat);
   lip.position.set(0, -0.0035, 0.0435);
-  const emit = new THREE.Mesh(new THREE.BoxGeometry(0.82, 0.003, 0.055), new THREE.MeshBasicMaterial({ color: new THREE.Color(2.8, 3.1, 3.7), toneMapped: false }));
+  const emit = new THREE.Mesh(new THREE.BoxGeometry(0.82, 0.003, 0.055), new THREE.MeshBasicMaterial({ color: new THREE.Color(3.2, 3.5, 4.1), toneMapped: false }));
   emit.position.set(0, -0.0145, 0);
   fixture.add(housing, lip, emit);
   for (const sx of [-1, 1]) {
@@ -286,10 +286,10 @@ export function createRoom(scene, renderer) {
   // soft glow around the fixture — tight core + wide cool veil (halation in-scene)
   const glowTex = makeGlow(128);
   const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: new THREE.Color(0.45, 0.65, 0.95), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.22, toneMapped: false }));
-  glow.scale.set(1.15, 0.22, 1);
+  glow.scale.set(1.25, 0.26, 1);
   glow.position.set(0, 0.5, 0.0);
-  const glowWide = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: new THREE.Color(0.25, 0.45, 0.85), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.10, toneMapped: false }));
-  glowWide.scale.set(1.9, 0.55, 1);
+  const glowWide = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: new THREE.Color(0.28, 0.50, 0.90), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.13, toneMapped: false }));
+  glowWide.scale.set(2.05, 0.62, 1);
   glowWide.position.set(0, 0.48, 0.05);
   group.add(glow, glowWide);
 

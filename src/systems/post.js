@@ -181,9 +181,9 @@ export function createPost(renderer, scene, camera) {
 
   const bloom = new UnrealBloomPass(
     new THREE.Vector2(size.x * Q.bloomScale, size.y * Q.bloomScale),
-    Q.name === 'high' ? 0.14 : 0.10,
-    0.32,
-    1.42
+    Q.name === 'high' ? 0.17 : 0.11,
+    0.36,
+    1.38
   );
   composer.addPass(bloom);
   composer.addPass(new OutputPass());
