@@ -357,21 +357,22 @@ export function createScenery(scene) {
 
   // ---- rocks
   const rockMat = patchWater(
-    new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0.04 }),
+    new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.62, metalness: 0.06 }),
     {
-      key: 'rock2', soft: 1.4,
+      key: 'rock3', soft: 1.2,
       onShader(shader) {
-        // wet specular sheen + algae film catches light
         shader.fragmentShader = shader.fragmentShader.replace(
           '#include <roughnessmap_fragment>',
           `#include <roughnessmap_fragment>
-           roughnessFactor *= 0.72;`
+           // pore darkening = rougher; vein = slightly smoother wet look
+           float pore = 1.0 - diffuseColor.r;
+           roughnessFactor = clamp(roughnessFactor * (0.85 + pore * 0.45), 0.25, 1.0);`
         );
         shader.fragmentShader = shader.fragmentShader.replace(
           '#include <emissivemap_fragment>',
           `#include <emissivemap_fragment>
-           { float wet = pow(max(0.0, causticAt(vWPos, 1.2).g), 1.8);
-             totalEmissiveRadiance += diffuseColor.rgb * wet * 0.18; }`
+           { float wet = pow(max(0.0, causticAt(vWPos, 1.0).g), 1.6);
+             totalEmissiveRadiance += diffuseColor.rgb * wet * 0.22; }`
         );
       },
     }
@@ -425,6 +426,40 @@ export function createScenery(scene) {
   plants.castShadow = true; plants.receiveShadow = true;
   plants.customDepthMaterial = depthMat;
   group.add(plants);
+
+  // leaf litter / detritus on sand (sparse organic debris)
+  {
+    const litterN = Q.name === 'high' ? 48 : 18;
+    const litterGeo = new THREE.PlaneGeometry(1, 1);
+    const litterMat = patchWater(
+      new THREE.MeshStandardMaterial({
+        color: 0x5a4020, roughness: 0.85, metalness: 0, side: THREE.DoubleSide,
+        transparent: true, opacity: 0.85,
+      }),
+      { key: 'litter', soft: 1.2 }
+    );
+    const litter = new THREE.InstancedMesh(litterGeo, litterMat, litterN);
+    const dummy = new THREE.Object3D();
+    const col = new THREE.Color();
+    for (let i = 0; i < litterN; i++) {
+      const x = (rnd() - 0.5) * 0.9;
+      const z = (rnd() - 0.5) * 0.36;
+      const y = sandHeight(x, z) + 0.0015;
+      dummy.position.set(x, y, z);
+      dummy.rotation.set(-Math.PI / 2 + (rnd() - 0.5) * 0.4, rnd() * 6.28, (rnd() - 0.5) * 0.5);
+      const s = 0.004 + rnd() * 0.012;
+      dummy.scale.set(s * (0.6 + rnd()), s * 0.35, s);
+      dummy.updateMatrix();
+      litter.setMatrixAt(i, dummy.matrix);
+      col.setRGB(0.25 + rnd() * 0.25, 0.14 + rnd() * 0.12, 0.05 + rnd() * 0.06);
+      litter.setColorAt(i, col);
+    }
+    litter.instanceMatrix.needsUpdate = true;
+    if (litter.instanceColor) litter.instanceColor.needsUpdate = true;
+    litter.castShadow = false;
+    litter.receiveShadow = true;
+    group.add(litter);
+  }
 
   return { group, sand, rocks, plants, bladeCount: nB, update() {} };
 }
