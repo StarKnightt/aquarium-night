@@ -337,9 +337,12 @@ export function createRoom(scene, renderer) {
   sun.shadow.mapSize.set(Q.shadowMap, Q.shadowMap);
   const sc = sun.shadow.camera;
   sc.left = -0.55; sc.right = 0.55; sc.top = 0.26; sc.bottom = -0.26; sc.near = 0.72; sc.far = 1.5;
-  sun.shadow.bias = -0.0002;
-  sun.shadow.normalBias = 0.008;
-  sun.shadow.radius = Q.name === 'high' ? 6 : 2;
+  sun.shadow.bias = -0.00015;
+  sun.shadow.normalBias = 0.012;
+  sun.shadow.radius = Q.name === 'high' ? 12 : 5;
+  sun.shadow.intensity = 0.32; // soft aquarium fill — umbras never ink-black
+  if ('blurSamples' in sun.shadow) sun.shadow.blurSamples = Q.name === 'high' ? 12 : 4;
+  sun.intensity = 2.35;
   scene.add(sun, sun.target);
 
   // 2) room lights — spill of tank glow onto stand/wall/floor + warm lamp + sand bounce
@@ -347,8 +350,8 @@ export function createRoom(scene, renderer) {
   spill.position.set(0, 0.58, 0.18);
   const under = new THREE.PointLight(new THREE.Color(0.22, 0.72, 0.80), 0.40, 3.2, 1.7);
   under.position.set(0, 0.18, 0.38);
-  const bounce = new THREE.PointLight(new THREE.Color(0.55, 0.72, 0.55), 0.22, 1.6, 2.0);
-  bounce.position.set(0, 0.05, 0.05);
+  const bounce = new THREE.PointLight(new THREE.Color(0.55, 0.78, 0.58), 0.42, 1.8, 1.8);
+  bounce.position.set(0, 0.04, 0.02);
   const standGlow = new THREE.PointLight(new THREE.Color(0.45, 0.70, 0.95), 0.20, 2.4, 2.0);
   standGlow.position.set(0, 0.02, 0.12);
   const wallWash = new THREE.PointLight(new THREE.Color(0.35, 0.55, 0.85), 0.28, 4.5, 1.6);

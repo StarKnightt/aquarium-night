@@ -61,13 +61,12 @@ function createCaustics(renderer) {
         for (int ch = 0; ch < 3; ch++) {
           float d = 1.0 + 0.025 * float(ch);            // slight dispersion per channel
           float det = (1.0 + d * hxx) * (1.0 + d * hyy) - d * d * hxy * hxy;
-          float I = 1.0 / (abs(det) + 0.028);
+          float I = 1.0 / (abs(det) + 0.040);
           out3[ch] = I;
         }
-        out3 = pow(out3 * 0.042, vec3(1.65));
-        // filament peak: keep thin bright ridges, soft floors
-        out3 = max(out3 - 0.08, 0.0);
-        out3 = out3 / (1.0 + out3 * 0.10);
+        out3 = pow(out3 * 0.048, vec3(1.75));
+        out3 = max(out3 - 0.04, 0.0);
+        out3 = out3 / (1.0 + out3 * 0.16);
         gl_FragColor = vec4(out3, 1.0);
       }`,
   });

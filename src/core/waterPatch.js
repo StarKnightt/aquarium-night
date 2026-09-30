@@ -14,12 +14,14 @@ export const WU = {
   uCaust: { value: null },
   uBoxMin: { value: new THREE.Vector3(-TANK.iw, TANK.waterMinY, -TANK.id) },
   uBoxMax: { value: new THREE.Vector3(TANK.iw, TANK.surfaceY, TANK.id) },
-  uCaustGain: { value: 0.82 },
+  uCaustGain: { value: 0.68 },
   uDbg: { value: 0 },
   uRoomAmbient: { value: new THREE.Color(0.012, 0.014, 0.018) },
-  uAbsorb: { value: new THREE.Vector3(0.52, 0.23, 0.19) },
-  uScatter: { value: new THREE.Color(0.020, 0.045, 0.052) },
-  uAmbient: { value: new THREE.Color(0.16, 0.20, 0.215) },
+  uAbsorb: { value: new THREE.Vector3(0.50, 0.22, 0.18) },
+  uScatter: { value: new THREE.Color(0.028, 0.055, 0.062) },
+  // teal sky-like fill: shadows should only go ~40-60% dark
+  uAmbient: { value: new THREE.Color(0.24, 0.32, 0.36) },
+  uShadowFloor: { value: 0.58 },
 };
 
 const waterGLSL = /* glsl */ `
@@ -33,6 +35,7 @@ uniform vec3 uAmbient;
 uniform float uCaustGain;
 uniform float uDbg;
 uniform float uTime;
+uniform float uShadowFloor;
 
 // light reaching a point under the surface: caustic network, sharpening toward the bottom
 vec3 causticAt(vec3 p, float soft);
@@ -54,7 +57,14 @@ vec3 causticAt(vec3 p, float soft) {
 
 vec3 waterAmbientAt(vec3 p) {
   float h = clamp((p.y - uBoxMin.y) / (uBoxMax.y - uBoxMin.y), 0.0, 1.0);
-  return uAmbient * (0.35 + 0.9 * h);
+  // brighter toward surface + slight near-glass bounce
+  float edge = min(uBoxMax.x - abs(p.x), uBoxMax.z - abs(p.z));
+  float nearGlass = 1.0 - smoothstep(0.0, 0.08, edge);
+  // sand bounce: warmer teal-green near the bed
+  float bed = 1.0 - smoothstep(0.0, 0.12, p.y - uBoxMin.y);
+  vec3 base = uAmbient * (0.45 + 0.85 * h + 0.18 * nearGlass);
+  base += vec3(0.06, 0.10, 0.07) * bed;
+  return base;
 }
 
 // absorption + in-scatter along the ray from camera through the water box to point p
@@ -119,7 +129,7 @@ export function patchWater(material, opts = {}) {
     baseFrag(shader, waterGLSL + extraFrag);
     let f = shader.fragmentShader;
     // NB: onBeforeCompile sees UN-EXPANDED #includes, so inline the light chunk before patching it.
-    const lfb = THREE.ShaderChunk.lights_fragment_begin
+    let lfb = THREE.ShaderChunk.lights_fragment_begin
       .replace(
         'getDirectionalLightInfo( directionalLight, directLight );',
         `getDirectionalLightInfo( directionalLight, directLight );
@@ -129,6 +139,18 @@ export function patchWater(material, opts = {}) {
         'getPointLightInfo( pointLight, geometryPosition, directLight );',
         'getPointLightInfo( pointLight, geometryPosition, directLight ); directLight.color = vec3(0.0);'
       );
+    // Soft underwater shadows: never crush to black; caustic dappling leaks light into shade
+    lfb = lfb.replace(
+      'directLight.color *= ( directLight.visible && receiveShadow ) ? getShadow( directionalShadowMap[ i ], directionalLightShadow.shadowMapSize, directionalLightShadow.shadowIntensity, directionalLightShadow.shadowBias, directionalLightShadow.shadowRadius, vDirectionalShadowCoord[ i ] ) : 1.0;',
+      `float aqShadow = ( directLight.visible && receiveShadow )
+         ? getShadow( directionalShadowMap[ i ], directionalLightShadow.shadowMapSize, directionalLightShadow.shadowIntensity, directionalLightShadow.shadowBias, directionalLightShadow.shadowRadius, vDirectionalShadowCoord[ i ] )
+         : 1.0;
+       float aqFill = uShadowFloor + 0.18 * causticAt(vWPos, 2.4).g;
+       aqShadow = mix(aqFill, 1.0, pow(aqShadow, 0.75));
+       // bluish scattered residual — shade never goes pure black
+       vec3 shadeTint = directLight.color * vec3(0.45, 0.68, 0.88) * 0.55;
+       directLight.color = mix(shadeTint + directLight.color * aqFill, directLight.color, aqShadow);`
+    );
     f = f.replace('#include <lights_fragment_begin>', lfb);
     f = f.replace(
       '#include <lights_fragment_end>',
@@ -139,7 +161,7 @@ export function patchWater(material, opts = {}) {
     shader.fragmentShader = f;
     if (onShader) onShader(shader);
   };
-  material.customProgramCacheKey = () => 'water' + (caustics ? 'C' : '') + (fog ? 'F' : '') + (opts.key || '');
+  material.customProgramCacheKey = () => 'waterS2' + (caustics ? 'C' : '') + (fog ? 'F' : '') + (opts.key || '');
   return material;
 }
 

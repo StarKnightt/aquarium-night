@@ -17,7 +17,7 @@ import { createExplore } from './systems/explore.js';
 const canvas = document.getElementById('c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance', stencil: false, preserveDrawingBuffer: isDebug });
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = isCine ? 0.95 : 0.88;
+renderer.toneMappingExposure = isCine ? 0.92 : 0.84;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.VSMShadowMap;
 renderer.setClearColor(0x000000, 1);

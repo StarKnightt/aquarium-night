@@ -14,8 +14,8 @@ const DoFShader = {
     uTexel: { value: new THREE.Vector2(1 / 1600, 1 / 900) },
     uDir: { value: new THREE.Vector2(1, 0) },
     uFocus: { value: 1.35 },
-    uAperture: { value: 0.007 },
-    uMaxBlur: { value: 1.35 },
+    uAperture: { value: 0.004 },
+    uMaxBlur: { value: 0.85 },
     uNear: { value: 0.03 },
     uFar: { value: 40 },
     uEnabled: { value: 1 },
@@ -64,10 +64,10 @@ const PhotoShader = {
     uAspect: { value: 1.7 },
     uGrain: { value: 0.024 },
     uVig: { value: 0.48 },
-    uCA: { value: 0.00055 },
-    uBarrel: { value: 0.010 },
-    uSoft: { value: 0.22 },
-    uHalo: { value: 0.32 },
+    uCA: { value: 0.00035 },
+    uBarrel: { value: 0.008 },
+    uSoft: { value: 0.12 },
+    uHalo: { value: 0.22 },
     uWarm: { value: 0.035 },
     uTexel: { value: new THREE.Vector2(1 / 1600, 1 / 900) },
     // tank AABB in UV (xy = min, zw = max); refraction magnifies inside
@@ -179,16 +179,16 @@ export function createPost(renderer, scene, camera) {
 
   const bloom = new UnrealBloomPass(
     new THREE.Vector2(size.x * Q.bloomScale, size.y * Q.bloomScale),
-    Q.name === 'high' ? 0.20 : 0.14,
-    0.38,
-    1.35
+    Q.name === 'high' ? 0.14 : 0.10,
+    0.32,
+    1.42
   );
   composer.addPass(bloom);
   composer.addPass(new OutputPass());
   const photo = new ShaderPass(PhotoShader);
-  photo.uniforms.uGrain.value = Q.grain ? (Q.name === 'high' ? 0.022 : 0.030) : 0;
-  photo.uniforms.uSoft.value = Q.name === 'high' ? 0.22 : 0.15;
-  photo.uniforms.uHalo.value = Q.name === 'high' ? 0.42 : 0.28;
+  photo.uniforms.uGrain.value = Q.grain ? (Q.name === 'high' ? 0.018 : 0.026) : 0;
+  photo.uniforms.uSoft.value = Q.name === 'high' ? 0.12 : 0.08;
+  photo.uniforms.uHalo.value = Q.name === 'high' ? 0.28 : 0.18;
   composer.addPass(photo);
 
   const focusPoint = new THREE.Vector3(0, 0.2, 0);

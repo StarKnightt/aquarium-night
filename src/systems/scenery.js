@@ -341,12 +341,12 @@ export function createScenery(scene) {
                vec4 rk = uRocks[i];
                vec2 d = (vWPos.xz - rk.xy) / max(rk.zw, vec2(0.001));
                float rn = length(d);
-               ao *= 1.0 - 0.55 * smoothstep(1.6, 0.55, rn);
+               ao *= 1.0 - 0.28 * smoothstep(1.5, 0.7, rn);
              }
              float edge = min(0.49 - abs(vWPos.x), 0.20 - abs(vWPos.z));
-             ao *= 0.78 + 0.22 * smoothstep(0.0, 0.04, edge);
+             ao *= 0.88 + 0.12 * smoothstep(0.0, 0.04, edge);
              reflectedLight.directDiffuse *= ao;
-             reflectedLight.indirectDiffuse *= ao; }`
+             reflectedLight.indirectDiffuse *= mix(0.7, 1.0, ao); }`
         );
       },
     }
@@ -423,7 +423,9 @@ export function createScenery(scene) {
   const { mat, depthMat } = bladeMaterials();
   const plants = new THREE.Mesh(P.geo, mat);
   plants.frustumCulled = false;
-  plants.castShadow = true; plants.receiveShadow = true;
+  // soft aquarium look: plants do not cast hard map shadows (scatter + AO carry contact)
+  plants.castShadow = false;
+  plants.receiveShadow = true;
   plants.customDepthMaterial = depthMat;
   group.add(plants);
 
