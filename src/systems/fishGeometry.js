@@ -73,29 +73,32 @@ function pushEyeDome(bp, bt, bf, bs, bd, buv, bi, sp, L, side, eyeT, eyeYFrac, e
   const hy = prof(sp.hy, eyeT) * L;
   const hw = hy * sp.hw;
   const dy = sp.dy * L;
-  const cx = side * hw * 0.95;
+  const cx = side * hw * 0.92;
   const cy = dy + eyeYFrac * L;
   const cz = zOf(eyeT);
-  const segs = 7, rings = 5;
+  const segs = 10, rings = 6;
   const start = bp.length / 3;
-  // pole + rings; UV locked to painted eye so dome samples dark cornea
-  bp.push(cx + side * eyeR * 0.15, cy, cz + eyeR * 0.35);
+  // cornea tip (wet specular sampled near painted catchlight)
+  bp.push(cx + side * eyeR * 0.22, cy, cz + eyeR * 0.42);
   bt.push(eyeT); bf.push(0); bs.push(side); bd.push(0);
   buv.push(eyeU, eyeV);
   for (let r = 1; r <= rings; r++) {
-    const pr = (r / rings) * Math.PI * 0.55;
+    const pr = (r / rings) * Math.PI * 0.58;
     const rr = Math.sin(pr) * eyeR;
     const zz = Math.cos(pr) * eyeR;
     for (let j = 0; j < segs; j++) {
       const a = (j / segs) * Math.PI * 2;
-      bp.push(cx + Math.cos(a) * rr * side * 0.35 + side * rr * 0.65, cy + Math.sin(a) * rr, cz + zz * 0.55 + eyeR * 0.2);
+      // slightly elliptical: flatter against body, taller dorsoventrally
+      const rx = rr * (0.55 + 0.45 * Math.abs(Math.cos(a)));
+      const ry = rr * (0.85 + 0.15 * Math.abs(Math.sin(a)));
+      bp.push(cx + Math.cos(a) * rx * side * 0.28 + side * rr * 0.72, cy + Math.sin(a) * ry, cz + zz * 0.5 + eyeR * 0.22);
       bt.push(eyeT); bf.push(0); bs.push(side); bd.push(0);
-      // slight UV bias toward catch-light for upper-front verts
-      const catchL = Math.max(0, Math.sin(a) * 0.35 + Math.cos(pr) * 0.2);
-      buv.push(eyeU - catchL * 0.012 * side, eyeV - catchL * 0.01);
+      const catchL = Math.max(0, Math.sin(a) * 0.4 + Math.cos(pr) * 0.25);
+      // outer rings sample sclera UV ring; inner → pupil
+      const uOff = (r / rings) * 0.018;
+      buv.push(eyeU - catchL * 0.014 * side + uOff * side * 0.3, eyeV - catchL * 0.012 + (r / rings) * 0.01);
     }
   }
-  // tip to first ring
   for (let j = 0; j < segs; j++) {
     const a = start + 1 + j, b = start + 1 + (j + 1) % segs;
     bi.push(start, a, b);
@@ -156,17 +159,29 @@ export function buildFishGeometry(sp, seg = 32, ring = 14) {
   const hyOf = (t) => prof(sp.hy, t) * L;
   const dyOf = () => sp.dy * L;
 
-  // ---- body (fin types: 0)
+  // ---- body (fin types: 0) — snout pinch, lip notch, operculum flare
   const bp = [], bt = [], bf = [], bs = [], bd = [], buv = [], bi = [];
   for (let i = 0; i <= seg; i++) {
     const t = i / seg;
-    const z = zOf(t), hy = hyOf(t), hw = hy * sp.hw;
+    const z = zOf(t);
+    let hy = hyOf(t), hw = hy * sp.hw;
+    // blunt/pointed snout per species + slight mouth cleft on lower lip
+    const snout = t < 0.12 ? (1.0 - Math.pow(1.0 - t / 0.12, 1.6) * 0.22) : 1.0;
+    hy *= snout; hw *= snout * (t < 0.06 ? 0.92 : 1.0);
+    // operculum (gill plate) lateral bulge ~15–28% along body
+    const gill = Math.exp(-Math.pow((t - 0.20) / 0.055, 2)) * 0.14;
+    hw *= 1.0 + gill;
     for (let j = 0; j < ring; j++) {
       const a = (j / ring) * Math.PI * 2;
       const sy = Math.sin(a);
-      const x = Math.cos(a) * hw;
-      const y = dyOf() + (sy >= 0 ? sy * hy : sy * hy * sp.belly);
-      bp.push(x, y, z);
+      const cx = Math.cos(a);
+      // mouth notch: lower-front verts pull inward
+      const mouth = (t < 0.05 && sy < -0.15) ? (1.0 - (0.05 - t) / 0.05 * (-sy) * 0.35) : 1.0;
+      const x = cx * hw * mouth;
+      const y = dyOf() + (sy >= 0 ? sy * hy : sy * hy * sp.belly) * mouth;
+      // soft lip ridge just above mouth line
+      const lip = (t < 0.04 && Math.abs(sy + 0.25) < 0.18) ? L * 0.0035 : 0;
+      bp.push(x, y + lip, z + (t < 0.03 ? L * 0.004 * (1 - t / 0.03) : 0));
       bt.push(t); bf.push(0); bs.push(0); bd.push(0);
       buv.push(...uvOf(x, y, z));
     }
@@ -252,7 +267,7 @@ export function buildFishGeometry(sp, seg = 32, ring = 14) {
         const z = zb - c.len * L * notchK * round;
         return [0, dyOf() + yy * spread * (0.92 + 0.08 * Math.sin(Math.PI * s)), z];
       },
-      12, 7, 1, 0, 0.22, angelThick
+      14, 9, 1, 0, 0.22, angelThick
     );
   }
   // dorsal (3)
@@ -266,7 +281,7 @@ export function buildFishGeometry(sp, seg = 32, ring = 14) {
         const h = d.h * L * (0.10 + 0.90 * bump) * (sp === SPECIES.angel ? (0.35 + 0.65 * Math.pow(s, 0.5) * (1 - 0.3 * s)) : 1);
         return [0, dyOf() + hyOf(t) * 0.98 + h, zOf(t) - d.sweep * L * bump * (0.35 + 0.65 * s)];
       },
-      12, 5, 3, 0, 0.14, angelThick
+      14, 7, 3, 0, 0.14, angelThick
     );
   }
   // anal (3)
@@ -280,7 +295,7 @@ export function buildFishGeometry(sp, seg = 32, ring = 14) {
         const h = d.h * L * (0.10 + 0.90 * bump);
         return [0, dyOf() - hyOf(t) * sp.belly * 0.98 - h, zOf(t) - d.sweep * L * bump * (0.35 + 0.65 * s)];
       },
-      12, 5, 3, 0, 0.14, angelThick
+      14, 7, 3, 0, 0.14, angelThick
     );
   }
   // pectorals (2), mirrored — softer paddle outline
@@ -300,7 +315,19 @@ export function buildFishGeometry(sp, seg = 32, ring = 14) {
           zOf(p.t) - p.len * L * (0.28 + 0.72 * s),
         ];
       },
-      6, 4, 2, side, 0.2
+      7, 5, 2, side, 0.2
+    );
+  }
+  // neon adipose (tiny soft lobe behind dorsal)
+  if (sp === SPECIES.neon) {
+    gridFin(
+      (s) => { const t = 0.62 + s * 0.08; return [0, dyOf() + hyOf(t) * 0.95, zOf(t)]; },
+      (s) => {
+        const t = 0.62 + s * 0.08;
+        const bump = Math.sin(Math.PI * s);
+        return [0, dyOf() + hyOf(t) * 0.95 + 0.04 * L * bump, zOf(t) - 0.03 * L * bump];
+      },
+      4, 3, 3, 0, 0.08
     );
   }
   // angelfish pelvic streamers
@@ -370,14 +397,21 @@ function scalePattern(ctx, sp, W, H, alpha, size) {
 function eye(ctx, sp, W, H, tx, ty, r, ring) {
   const L = sp.L, Ltot = L * sp.ltot;
   const x = (tx * L / Ltot) * W, y = (0.5 - (sp.dy * L + ty * L) / sp.hbox) * H;
-  // iris ring first for contrast, then dark cornea
-  const iris = ctx.createRadialGradient(x, y, r * 0.35, x, y, r * 1.4);
-  iris.addColorStop(0, '#0a0a0c'); iris.addColorStop(0.42, '#121418'); iris.addColorStop(0.58, ring); iris.addColorStop(0.78, ring); iris.addColorStop(1, 'rgba(0,0,0,0)');
-  ctx.fillStyle = iris; ctx.beginPath(); ctx.arc(x, y, r * 1.4, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = '#030304'; ctx.beginPath(); ctx.arc(x, y, r * 0.48, 0, Math.PI * 2); ctx.fill();
-  // dome catchlights
-  ctx.fillStyle = 'rgba(255,255,255,0.95)'; ctx.beginPath(); ctx.arc(x - r * 0.30, y - r * 0.34, r * 0.26, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = 'rgba(220,235,255,0.55)'; ctx.beginPath(); ctx.arc(x + r * 0.20, y + r * 0.14, r * 0.10, 0, Math.PI * 2); ctx.fill();
+  // sclera
+  ctx.fillStyle = 'rgba(245,248,250,0.92)';
+  ctx.beginPath(); ctx.arc(x, y, r * 1.55, 0, Math.PI * 2); ctx.fill();
+  // iris
+  const iris = ctx.createRadialGradient(x - r * 0.08, y - r * 0.1, r * 0.12, x, y, r * 1.35);
+  iris.addColorStop(0, ring); iris.addColorStop(0.45, ring); iris.addColorStop(0.72, '#1a1c20'); iris.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = iris; ctx.beginPath(); ctx.arc(x, y, r * 1.22, 0, Math.PI * 2); ctx.fill();
+  // pupil
+  ctx.fillStyle = '#020203'; ctx.beginPath(); ctx.arc(x - r * 0.04, y - r * 0.02, r * 0.42, 0, Math.PI * 2); ctx.fill();
+  // wet cornea speculars
+  ctx.fillStyle = 'rgba(255,255,255,0.97)'; ctx.beginPath(); ctx.arc(x - r * 0.32, y - r * 0.36, r * 0.28, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = 'rgba(210,230,255,0.55)'; ctx.beginPath(); ctx.arc(x + r * 0.22, y + r * 0.16, r * 0.11, 0, Math.PI * 2); ctx.fill();
+  // lower lid soft shadow
+  ctx.strokeStyle = 'rgba(20,18,16,0.35)'; ctx.lineWidth = r * 0.18;
+  ctx.beginPath(); ctx.arc(x, y + r * 0.15, r * 1.05, 0.15, Math.PI - 0.15); ctx.stroke();
 }
 
 /** Paint thin fin rays (radial lines from base) into fin regions of the shared UV atlas. */
@@ -515,27 +549,35 @@ export function paintSkin(key, sp) {
       rg.addColorStop(0, 'rgba(210,25,20,0)'); rg.addColorStop(1, 'rgba(226,28,20,1)');
       ctx.fillStyle = rg;
       ctx.fillRect(px(0.3), py(0.005), px(0.7), H);
+      // belly translucency wash (redder, slightly luminous)
+      const bel = ctx.createLinearGradient(0, py(0.02), 0, py(-0.12));
+      bel.addColorStop(0, 'rgba(200,40,30,0)'); bel.addColorStop(0.5, 'rgba(220,50,35,0.35)'); bel.addColorStop(1, 'rgba(240,90,70,0.55)');
+      ctx.fillStyle = bel; ctx.fillRect(0, py(-0.02), W, H);
       ctx.fillStyle = 'rgba(20,28,22,0.55)'; ctx.fillRect(0, 0, W, py(0.045));
-      // iridescent stripe — cooler, less white so bloom doesn't make light-sticks
+      // iridescent neon stripe
       const sg = ctx.createLinearGradient(px(0.12), 0, px(0.95), 0);
       sg.addColorStop(0, 'rgba(40,90,130,0.0)');
-      sg.addColorStop(0.12, 'rgba(45,120,160,0.85)');
-      sg.addColorStop(0.55, 'rgba(70,150,175,0.88)');
-      sg.addColorStop(1, 'rgba(90,165,185,0.55)');
-      ctx.strokeStyle = sg; ctx.lineWidth = H * 0.032; ctx.lineCap = 'round';
+      sg.addColorStop(0.12, 'rgba(30,160,220,0.95)');
+      sg.addColorStop(0.55, 'rgba(60,200,230,0.95)');
+      sg.addColorStop(1, 'rgba(90,180,210,0.6)');
+      ctx.strokeStyle = sg; ctx.lineWidth = H * 0.034; ctx.lineCap = 'round';
       ctx.beginPath(); ctx.moveTo(px(0.10), py(0.045)); ctx.quadraticCurveTo(px(0.55), py(0.062), px(0.97), py(0.020)); ctx.stroke();
-      // soft specular edge (not pure white)
-      ctx.strokeStyle = 'rgba(200,230,240,0.28)'; ctx.lineWidth = H * 0.007;
+      ctx.strokeStyle = 'rgba(180,240,255,0.45)'; ctx.lineWidth = H * 0.01;
       ctx.beginPath(); ctx.moveTo(px(0.12), py(0.052)); ctx.quadraticCurveTo(px(0.55), py(0.070), px(0.95), py(0.028)); ctx.stroke();
+      // operculum edge + mouth
+      ctx.strokeStyle = 'rgba(15,20,18,0.55)'; ctx.lineWidth = H * 0.012;
+      ctx.beginPath(); ctx.moveTo(px(0.16), py(0.06)); ctx.quadraticCurveTo(px(0.20), py(0.0), px(0.18), py(-0.05)); ctx.stroke();
+      ctx.strokeStyle = 'rgba(30,20,18,0.7)'; ctx.lineWidth = H * 0.008;
+      ctx.beginPath(); ctx.moveTo(px(0.01), py(-0.01)); ctx.quadraticCurveTo(px(0.04), py(-0.025), px(0.07), py(-0.015)); ctx.stroke();
+      scalePattern(ctx, sp, W, H, 0.12, 6);
     } else if (key === 'platy') {
-      // lighter belly fade
+      // lighter belly fade + warm translucency
       const bel = ctx.createLinearGradient(0, py(0.06), 0, py(-0.14));
-      bel.addColorStop(0, 'rgba(255,200,120,0)'); bel.addColorStop(0.45, 'rgba(255,210,140,0.35)'); bel.addColorStop(1, 'rgba(255,235,200,0.7)');
+      bel.addColorStop(0, 'rgba(255,200,120,0)'); bel.addColorStop(0.35, 'rgba(255,140,70,0.4)'); bel.addColorStop(1, 'rgba(255,210,160,0.75)');
       ctx.fillStyle = bel; ctx.fillRect(0, 0, W, H);
       ctx.fillStyle = 'rgba(100,18,0,0.22)'; ctx.fillRect(0, 0, W, py(0.14));
-      scalePattern(ctx, sp, W, H, 0.22, 9);
-      // micro glitter flecks (more visible sparkle)
-      for (let i = 0; i < 180; i++) {
+      scalePattern(ctx, sp, W, H, 0.28, 8);
+      for (let i = 0; i < 200; i++) {
         const gx = px(0.12 + Math.random() * 0.75), gy = py(-0.08 + Math.random() * 0.2);
         ctx.fillStyle = `rgba(255,248,220,${0.28 + Math.random() * 0.6})`;
         ctx.beginPath(); ctx.arc(gx, gy, 0.6 + Math.random() * 1.8, 0, 6.3); ctx.fill();
@@ -544,6 +586,10 @@ export function paintSkin(key, sp) {
         ctx.fillStyle = 'rgba(30,8,0,0.32)';
         ctx.beginPath(); ctx.arc(px(0.3 + Math.random() * 0.6), py(-0.1 + Math.random() * 0.22), 1.2 + Math.random() * 2, 0, 6.3); ctx.fill();
       }
+      ctx.strokeStyle = 'rgba(60,20,10,0.5)'; ctx.lineWidth = H * 0.014;
+      ctx.beginPath(); ctx.moveTo(px(0.18), py(0.08)); ctx.quadraticCurveTo(px(0.24), py(0.0), px(0.20), py(-0.08)); ctx.stroke();
+      ctx.strokeStyle = 'rgba(40,12,8,0.65)'; ctx.lineWidth = H * 0.01;
+      ctx.beginPath(); ctx.moveTo(px(0.01), py(-0.02)); ctx.quadraticCurveTo(px(0.05), py(-0.04), px(0.09), py(-0.02)); ctx.stroke();
     } else if (key === 'angel') {
       const bars = [[0.08, 0.075], [0.44, 0.085], [0.86, 0.06]];
       for (const [t, w] of bars) {
@@ -554,15 +600,36 @@ export function paintSkin(key, sp) {
       const gg = ctx.createRadialGradient(px(0.3), py(0.05), 0, px(0.3), py(0.05), px(0.5));
       gg.addColorStop(0, 'rgba(235,170,70,0.5)'); gg.addColorStop(1, 'rgba(235,170,70,0)');
       ctx.fillStyle = gg; ctx.fillRect(0, 0, W, H);
-      scalePattern(ctx, sp, W, H, 0.10, 14);
+      // silver iridescent wash
+      const ir = ctx.createLinearGradient(0, py(0.2), 0, py(-0.15));
+      ir.addColorStop(0, 'rgba(200,220,240,0.0)'); ir.addColorStop(0.45, 'rgba(210,225,240,0.22)'); ir.addColorStop(1, 'rgba(240,245,250,0.12)');
+      ctx.fillStyle = ir; ctx.fillRect(0, 0, W, H);
+      scalePattern(ctx, sp, W, H, 0.14, 12);
+      ctx.strokeStyle = 'rgba(30,30,36,0.45)'; ctx.lineWidth = H * 0.012;
+      ctx.beginPath(); ctx.moveTo(px(0.17), py(0.12)); ctx.quadraticCurveTo(px(0.22), py(0.0), px(0.19), py(-0.1)); ctx.stroke();
     } else {
-      for (let i = 0; i < 90; i++) {
-        ctx.fillStyle = `rgba(40,28,15,${0.25 + Math.random() * 0.35})`;
+      // corydoras armour plates + speckles
+      for (let row = 0; row < 5; row++) {
+        const yy = py(0.08 - row * 0.035);
+        ctx.strokeStyle = `rgba(55,40,22,${0.35 + row * 0.05})`; ctx.lineWidth = H * 0.018;
+        ctx.beginPath();
+        ctx.moveTo(px(0.12), yy);
+        for (let k = 0; k < 8; k++) {
+          const tt = 0.12 + k * 0.1;
+          ctx.lineTo(px(tt), yy + Math.sin(k * 1.2) * H * 0.008);
+        }
+        ctx.stroke();
+      }
+      for (let i = 0; i < 110; i++) {
+        ctx.fillStyle = `rgba(40,28,15,${0.25 + Math.random() * 0.4})`;
         ctx.beginPath(); ctx.arc(px(0.15 + Math.random() * 0.8), py(-0.02 + Math.random() * 0.16), 1.5 + Math.random() * 4, 0, 6.3); ctx.fill();
       }
-      ctx.strokeStyle = 'rgba(70,52,30,0.5)'; ctx.lineWidth = H * 0.05;
+      ctx.strokeStyle = 'rgba(70,52,30,0.55)'; ctx.lineWidth = H * 0.05;
       ctx.beginPath(); ctx.moveTo(px(0.2), py(0.03)); ctx.lineTo(px(0.98), py(0.02)); ctx.stroke();
-      ctx.fillStyle = 'rgba(40,30,18,0.6)'; ctx.beginPath(); ctx.ellipse(px(0.42), py(0.10), px(0.07), H * 0.08, 0, 0, 6.3); ctx.fill();
+      // dorsal spine base plate
+      ctx.fillStyle = 'rgba(40,30,18,0.7)'; ctx.beginPath(); ctx.ellipse(px(0.42), py(0.10), px(0.07), H * 0.08, 0, 0, 6.3); ctx.fill();
+      ctx.strokeStyle = 'rgba(50,35,20,0.6)'; ctx.lineWidth = H * 0.014;
+      ctx.beginPath(); ctx.moveTo(px(0.18), py(0.05)); ctx.quadraticCurveTo(px(0.24), py(-0.02), px(0.20), py(-0.07)); ctx.stroke();
     }
     ctx.restore();
 

@@ -281,12 +281,11 @@ function bladeMaterials() {
       .replace('#include <begin_vertex>', 'vec3 transformed = bP;');
   const mat = patchWater(
     new THREE.MeshPhysicalMaterial({
-      roughness: 0.32, metalness: 0.0, side: THREE.DoubleSide,
-      clearcoat: 0.35, clearcoatRoughness: 0.55,
-      sheen: 0.4, sheenRoughness: 0.65, sheenColor: new THREE.Color(0.45, 0.7, 0.25),
+      roughness: 0.36, metalness: 0.0, side: THREE.DoubleSide,
+      clearcoat: 0.18, clearcoatRoughness: 0.62,
     }),
     {
-      key: 'blade5', soft: 0.95,
+      key: 'blade6', soft: 0.95,
       vertex,
       extraFrag: 'varying float vT; varying float vU; varying vec3 vCol; varying float vShape;',
       onShader(shader) {
@@ -335,7 +334,7 @@ function bladeMaterials() {
       .replace('#include <common>', '#include <common>\n' + BLADE_VERT_FN)
       .replace('#include <begin_vertex>', 'vec3 bP, bN; bladeFrame(position.y, position.x, bP, bN); vec3 transformed = bP;');
   };
-  depthMat.customProgramCacheKey = () => 'bladeDepth5';
+  depthMat.customProgramCacheKey = () => 'bladeDepth6';
   return { mat, depthMat };
 }
 

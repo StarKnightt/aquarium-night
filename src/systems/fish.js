@@ -81,7 +81,7 @@ function makeMaterial(key, sp, tex, isFin) {
     mat.alphaMap = null;
   }
   return patchWater(mat, {
-    key: `fish-${key}-${isFin ? 'f' : 'b'}v7`,
+    key: `fish-${key}-${isFin ? 'f' : 'b'}v8`,
     vertex: fishVertex(sp.L),
     soft: isAngel ? 0.55 : 0.4,
     onShader: isFin
@@ -90,35 +90,50 @@ function makeMaterial(key, sp, tex, isFin) {
             shader.fragmentShader = shader.fragmentShader.replace(
               '#include <map_fragment>',
               `#include <map_fragment>
-               // keep angel membrane readable at grazing angles
                diffuseColor.a = max(diffuseColor.a, 0.72);
-               diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.88, 0.86, 0.82), 0.12);`
+               diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.88, 0.86, 0.82), 0.12);
+               // soft ray darkening from map already; light caustic wash on membrane
+               diffuseColor.rgb += causticAt(vWPos) * 0.08;`
             );
           }
-        : null)
+        : (shader) => {
+            shader.fragmentShader = shader.fragmentShader.replace(
+              '#include <emissivemap_fragment>',
+              `#include <emissivemap_fragment>
+               totalEmissiveRadiance += causticAt(vWPos) * diffuseColor.rgb * 0.14;`
+            );
+          })
       : (shader) => {
-          // force fully opaque body even if map samples fringe alpha
           shader.fragmentShader = shader.fragmentShader.replace(
             '#include <map_fragment>',
             `#include <map_fragment>
              diffuseColor.a = 1.0;`
           );
           if (isNeon) {
-            // angle-dependent neon stripe flash (view-dependent iridescence boost)
             shader.fragmentShader = shader.fragmentShader.replace(
               '#include <emissivemap_fragment>',
               `#include <emissivemap_fragment>
                { vec3 Vv = normalize(cameraPosition - vWPos);
-                 float flash = pow(1.0 - abs(dot(normal, Vv)), 2.4);
-                 float stripe = smoothstep(0.35, 0.75, diffuseColor.b - diffuseColor.r);
-                 totalEmissiveRadiance += vec3(0.15, 0.55, 0.95) * flash * stripe * 0.85
-                                        + causticAt(vWPos) * diffuseColor.rgb * 0.12; }`
+                 float flash = pow(1.0 - abs(dot(normal, Vv)), 2.1);
+                 float stripe = smoothstep(0.28, 0.72, diffuseColor.b - diffuseColor.r * 0.6);
+                 float belly = smoothstep(0.35, 0.85, diffuseColor.r - diffuseColor.g * 0.4);
+                 totalEmissiveRadiance += vec3(0.12, 0.62, 1.05) * flash * stripe * 1.05
+                                        + vec3(0.55, 0.12, 0.08) * belly * 0.22
+                                        + causticAt(vWPos) * diffuseColor.rgb * 0.16; }`
+            );
+          } else if (isPlaty) {
+            shader.fragmentShader = shader.fragmentShader.replace(
+              '#include <emissivemap_fragment>',
+              `#include <emissivemap_fragment>
+               { float belly = smoothstep(0.4, 0.9, diffuseColor.r * 0.6 + diffuseColor.g * 0.4);
+                 totalEmissiveRadiance += causticAt(vWPos) * diffuseColor.rgb * 0.14
+                                        + vec3(1.0, 0.35, 0.12) * belly * 0.12; }`
             );
           } else {
             shader.fragmentShader = shader.fragmentShader.replace(
               '#include <emissivemap_fragment>',
               `#include <emissivemap_fragment>
-               { totalEmissiveRadiance += causticAt(vWPos) * diffuseColor.rgb * 0.10; }`
+               { totalEmissiveRadiance += causticAt(vWPos) * diffuseColor.rgb * 0.14; }`
             );
           }
         },
@@ -140,8 +155,8 @@ export function createFish(scene, { scenery, food, water, onEvent }) {
     const n = sp.count;
     // smoother silhouettes on high; low tier keeps Q caps for phone cost
     const hi = Q.name !== 'low';
-    const seg = Math.max(Q.fishSeg, hi ? (key === 'angel' || key === 'neon' ? 36 : key === 'platy' ? 32 : Q.fishSeg) : Q.fishSeg);
-    const ring = Math.max(Q.fishRing, hi ? (key === 'angel' || key === 'neon' ? 16 : 14) : Q.fishRing);
+    const seg = Math.max(Q.fishSeg, hi ? (key === 'angel' || key === 'neon' ? 44 : key === 'platy' ? 38 : 34) : Q.fishSeg);
+    const ring = Math.max(Q.fishRing, hi ? (key === 'angel' || key === 'neon' ? 20 : 16) : Q.fishRing);
     const { body, fins } = buildFishGeometry(sp, seg, ring);
     const attrs = {
       iPhase: new THREE.InstancedBufferAttribute(new Float32Array(n), 1),
@@ -379,10 +394,11 @@ export function createFish(scene, { scenery, food, water, onEvent }) {
     }
 
     const sn = f.spd / sp.speed;
-    f.phase += dt * (5.2 + Math.min(sn, 6) * 5.2 + f.panic * 12);
-    // calmer pectoral flutter; flare when panicking
-    f.flap += dt * ((2.2 + Math.min(sn, 3) * 0.9) * (1 + f.panic * 4.5));
-    const ampTarget = THREE.MathUtils.clamp(0.28 + sn * 0.52 + f.panic * 1.1, 0.22, 2.0);
+    // yaw-coordinated tail beat: turn advances phase so C-bend + wave travel together
+    f.phase += dt * (5.2 + Math.min(sn, 6) * 5.2 + f.panic * 12) + yawRate * 0.35 * dt;
+    // calmer pectoral flutter; idle dither + panic flare
+    f.flap += dt * ((2.2 + Math.min(sn, 3) * 0.9) * (1 + f.panic * 4.5) + 0.55 + 0.35 * Math.sin(t * 1.7 + f.seed));
+    const ampTarget = THREE.MathUtils.clamp(0.28 + sn * 0.52 + f.panic * 1.1 + Math.abs(f.bend) * 0.25, 0.22, 2.0);
     f.amp += (ampTarget - f.amp) * Math.min(1, dt * 5);
     f.bend += (f.bendTarget - f.bend) * Math.min(1, dt * (f.bendHold > 0 ? 18 : 10));
     f.roll += (THREE.MathUtils.clamp(-yawRate * 0.10, -0.5, 0.5) - f.roll) * Math.min(1, dt * 6);
