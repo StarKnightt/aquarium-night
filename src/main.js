@@ -43,6 +43,18 @@ sys.food = createFood(scene, { water: sys.water, onEvent: onSim });
 sys.fish = createFish(scene, { scenery: sys.scenery, food: sys.food, water: sys.water, onEvent: onSim });
 sys.bubbles = createBubbles(scene, { water: sys.water, onEvent: onSim });
 
+// depth-aware god rays: half-res occlusion from sand/rocks/plants/fish bodies
+{
+  const occ = [];
+  if (sys.scenery?.sand) occ.push(sys.scenery.sand);
+  if (sys.scenery?.plants) occ.push(sys.scenery.plants);
+  sys.scenery?.group?.traverse((o) => {
+    if (o.isMesh && o !== sys.scenery.sand && o !== sys.scenery.plants && o.geometry && !o.material?.transparent) occ.push(o);
+  });
+  for (const k in sys.fish.species) occ.push(sys.fish.species[k].bodyMesh);
+  sys.water.setRayOccluders(occ);
+}
+
 // ---- camera + orbit (slight orbit only)
 const target = new THREE.Vector3(0, 0.2, 0);
 const ORBIT = {
@@ -123,7 +135,7 @@ function resize() {
     camera.aspect = innerWidth / innerHeight;
     camera.updateProjectionMatrix();
   }
-  sys.water?.resize?.(pr);
+  sys.water?.resize?.(pr, innerWidth, innerHeight);
 }
 if (!isCine) frameCamera(false);
 resize();
@@ -286,7 +298,10 @@ function frame() {
     }
     dbgQuad.mat.uniforms.t.value = sys.water.caustics.rt.texture;
     renderer.setRenderTarget(null); renderer.render(dbgQuad.scene, dbgQuad.cam);
-  } else post.render(dt, simTime);
+  } else {
+    sys.water?.updateRayOcclusion?.(camera);
+    post.render(dt, simTime);
+  }
   adaptScale(now);
   requestAnimationFrame(frame);
 }

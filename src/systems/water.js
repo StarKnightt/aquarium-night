@@ -194,18 +194,39 @@ function createSurface() {
 // Volumetric light: ray-march the water volume (back faces, depth tested) summing light that comes
 // down through the surface, modulated by the animated caustic pattern -> soft moving shafts.
 // ---------------------------------------------------------------------------------------------
-function createRays() {
+function createRays(renderer) {
   const size = new THREE.Vector3().subVectors(WU.uBoxMax.value, WU.uBoxMin.value);
   const geo = new THREE.BoxGeometry(size.x, size.y, size.z);
   geo.translate(0, WU.uBoxMin.value.y + size.y / 2, 0);
+
+  // half-res depth of opaque tank contents (rocks/plants/sand/fish) for shaft occlusion
+  const occW = 512, occH = 288;
+  const occRT = new THREE.WebGLRenderTarget(occW, occH, {
+    minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter,
+    format: THREE.RGBAFormat, type: THREE.UnsignedByteType, depthBuffer: true,
+  });
+  const occDepthMat = new THREE.MeshDepthMaterial({ depthPacking: THREE.BasicDepthPacking });
+  const viewProj = new THREE.Matrix4();
+  let occluders = [];
+
   const mat = new THREE.ShaderMaterial({
     transparent: true, depthWrite: false, side: THREE.BackSide,
     blending: THREE.AdditiveBlending,
-    uniforms: { ...WU, uSteps: { value: Q.rayBands }, uRayGain: { value: 1.35 } },
+    uniforms: {
+      ...WU,
+      uSteps: { value: Q.rayBands },
+      uRayGain: { value: 1.85 },
+      tOccDepth: { value: occRT.texture },
+      uOccOn: { value: Q.name === 'high' ? 1.0 : 0.0 },
+      uViewProj: { value: viewProj },
+    },
     vertexShader: 'varying vec3 vW; void main(){ vec4 w = modelMatrix * vec4(position,1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }',
     fragmentShader: /* glsl */ `
       varying vec3 vW;
-      uniform sampler2D uCaust; uniform vec3 uBoxMin, uBoxMax, uAbsorb, uScatter; uniform float uSteps, uRayGain, uTime;
+      uniform sampler2D uCaust; uniform sampler2D tOccDepth;
+      uniform mat4 uViewProj;
+      uniform vec3 uBoxMin, uBoxMax, uAbsorb, uScatter;
+      uniform float uSteps, uRayGain, uTime, uOccOn;
       float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
       void main() {
         vec3 ro = cameraPosition;
@@ -220,7 +241,6 @@ function createRays() {
         float jit = hash(gl_FragCoord.xy + uTime);
         vec3 acc = vec3(0.0);
         float trans = 1.0;
-        // sparse shaft mask: noise-modulated vertical bands tied to caustic pattern
         for (float i = 0.0; i < 20.0; i++) {
           if (i >= uSteps) break;
           float t = te + (i + jit) * dt;
@@ -230,15 +250,28 @@ function createRays() {
           float sh = textureLod(uCaust, vec2(uv.x * 0.7, uv.y * 0.15), 2.0).g;
           float sh2 = textureLod(uCaust, vec2(uv.x * 0.37 + 0.31, uv.y * 0.10), 1.4).g;
           float shafts = pow(clamp(sh * 0.55 + sh2 * 0.45, 0.0, 3.0), 2.4);
-          // noise sparsity so shafts aren't a uniform fog slab
           float sparse = smoothstep(0.35, 0.85, hash(floor(p.xz * 14.0) + floor(uTime * 0.4)));
           shafts *= 0.45 + 0.55 * sparse;
+          // depth occlusion: rocks/plants/fish cut the beams
+          if (uOccOn > 0.5) {
+            vec4 cp = uViewProj * vec4(p, 1.0);
+            vec3 ndc = cp.xyz / max(cp.w, 1e-5);
+            vec2 suv = ndc.xy * 0.5 + 0.5;
+            if (suv.x > 0.0 && suv.x < 1.0 && suv.y > 0.0 && suv.y < 1.0 && abs(ndc.z) < 1.0) {
+              float zd = texture2D(tOccDepth, suv).r; // BasicDepthPacking: 1.0 - fragCoordZ
+              float zBuff = 1.0 - zd;
+              float zHere = ndc.z * 0.5 + 0.5;
+              float blocked = smoothstep(zHere - 0.004, zHere - 0.012, zBuff);
+              shafts *= mix(1.0, 0.06, blocked);
+              // soft contact darkening just behind occluders
+              trans *= mix(1.0, 0.82, blocked * 0.5);
+            }
+          }
           float foot = smoothstep(0.55, 0.05, abs(p.x)) * 0.4 + 0.6;
           float zf = smoothstep(0.24, -0.18, p.z) * 0.35 + 0.65;
           float lightAmt = exp(-depth * 2.0) * foot * zf;
-          // mild backscatter haze increasing toward far glass
           float farHaze = smoothstep(0.05, -0.18, p.z) * 0.35;
-          acc += trans * uScatter * lightAmt * (0.06 + farHaze + 3.4 * shafts) * dt * L;
+          acc += trans * uScatter * lightAmt * (0.08 + farHaze + 4.4 * shafts) * dt * L;
           trans *= exp(-dot(uAbsorb, vec3(0.33)) * dt * L * 0.55);
         }
         gl_FragColor = vec4(acc * uRayGain * 0.62, 1.0);
@@ -247,7 +280,67 @@ function createRays() {
   const mesh = new THREE.Mesh(geo, mat);
   mesh.renderOrder = 1;
   mesh.frustumCulled = false;
-  return { mesh, mat };
+
+  const depthScene = new THREE.Scene();
+  const proxyCache = new Map();
+
+  function setOccluders(list) {
+    occluders = (list || []).filter((o) => o && o.geometry);
+    proxyCache.clear();
+  }
+
+  function proxyFor(o) {
+    let p = proxyCache.get(o);
+    if (!p) {
+      if (o.isInstancedMesh) {
+        p = new THREE.InstancedMesh(o.geometry, o.customDepthMaterial || occDepthMat, o.count);
+        p.instanceMatrix = o.instanceMatrix;
+      } else {
+        p = new THREE.Mesh(o.geometry, o.customDepthMaterial || occDepthMat);
+      }
+      p.frustumCulled = false;
+      p.matrixAutoUpdate = false;
+      proxyCache.set(o, p);
+    }
+    return p;
+  }
+
+  function updateOcclusion(camera) {
+    if (Q.name !== 'high' || !occluders.length) {
+      mat.uniforms.uOccOn.value = 0.0;
+      return;
+    }
+    mat.uniforms.uOccOn.value = 1.0;
+    viewProj.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+    mat.uniforms.uViewProj.value.copy(viewProj);
+
+    while (depthScene.children.length) depthScene.remove(depthScene.children[0]);
+    for (const o of occluders) {
+      o.updateMatrixWorld(true);
+      const p = proxyFor(o);
+      if (o.isInstancedMesh) {
+        p.count = o.count;
+        p.instanceMatrix = o.instanceMatrix;
+      }
+      p.matrixWorld.copy(o.matrixWorld);
+      depthScene.add(p);
+    }
+
+    const prevRT = renderer.getRenderTarget();
+    const prevAuto = renderer.autoClear;
+    renderer.setRenderTarget(occRT);
+    renderer.autoClear = true;
+    renderer.clear();
+    renderer.render(depthScene, camera);
+    renderer.autoClear = prevAuto;
+    renderer.setRenderTarget(prevRT);
+  }
+
+  function resizeOcc(w, h) {
+    occRT.setSize(Math.max(1, (w * 0.5) | 0), Math.max(1, (h * 0.5) | 0));
+  }
+
+  return { mesh, mat, setOccluders, updateOcclusion, resizeOcc };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -311,10 +404,9 @@ function createParticles() {
 export function createWater(scene, renderer) {
   const caustics = createCaustics(renderer);
   const surface = createSurface();
-  const rays = createRays();
+  const rays = createRays(renderer);
   const particles = createParticles();
 
-  // thin meniscus line where water climbs the front glass
   const meniscus = new THREE.Mesh(
     new THREE.PlaneGeometry(TANK.iw * 2, 0.0035),
     new THREE.MeshBasicMaterial({ color: new THREE.Color(0.40, 0.55, 0.70), transparent: true, opacity: 0.30, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false })
@@ -330,7 +422,12 @@ export function createWater(scene, renderer) {
     surface, rays, particles, caustics,
     meniscus, meniscus2,
     addRipple: surface.addRipple,
-    resize(pxRatio) { particles.mat.uniforms.uPx.value = pxRatio; },
+    setRayOccluders(list) { rays.setOccluders(list); },
+    updateRayOcclusion(camera) { rays.updateOcclusion(camera); },
+    resize(pxRatio, w, h) {
+      particles.mat.uniforms.uPx.value = pxRatio;
+      if (w && h) rays.resizeOcc(w * pxRatio, h * pxRatio);
+    },
     update(dt, t) { caustics.update(dt, t); },
   };
 }
