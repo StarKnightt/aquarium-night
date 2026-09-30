@@ -111,25 +111,25 @@ function createSurface() {
     fragmentShader: /* glsl */ `
       varying vec3 vW; uniform float uTime; uniform vec4 uRip[8]; uniform sampler2D uCaust;
       ${ENV_GLSL}
-      // gradient of the surface height field: gentle filter-flow chop + travelling ripples
+      // gradient of the surface height field: gentler filter-flow chop + travelling ripples
       vec2 waveGrad(vec2 p, float t) {
         vec2 g = vec2(0.0);
-        vec2 d0 = normalize(vec2(0.18, 1.0));  g += d0 * 0.00085 * 34.0 * cos(dot(d0, p) * 34.0 + t * 1.30 + sin(p.x * 7.0) * 1.2);
-        vec2 d1 = normalize(vec2(-0.25, 1.0)); g += d1 * 0.00050 * 58.0 * cos(dot(d1, p) * 58.0 - t * 1.75 + 1.3 + sin(p.x * 11.0) * 1.5);
-        vec2 d2 = normalize(vec2(0.35, -1.0)); g += d2 * 0.00030 * 91.0 * cos(dot(d2, p) * 91.0 + t * 2.4 + 2.1);
-        vec2 d3 = normalize(vec2(-1.0, -0.15)); g += d3 * 0.00018 * 120.0 * cos(dot(d3, p) * 120.0 - t * 3.1);
-        // fine wind of turbulence from the filter outflow (right side)
-        float flow = smoothstep(0.1, 0.5, p.x);
-        g += vec2(1.0, 0.0) * flow * 0.010 * cos(p.x * 210.0 - t * 5.5 + sin(p.y * 40.0) * 2.0);
+        vec2 d0 = normalize(vec2(0.18, 1.0));  g += d0 * 0.00055 * 28.0 * cos(dot(d0, p) * 28.0 + t * 1.05 + sin(p.x * 5.0) * 1.0);
+        vec2 d1 = normalize(vec2(-0.25, 1.0)); g += d1 * 0.00035 * 48.0 * cos(dot(d1, p) * 48.0 - t * 1.45 + 1.3 + sin(p.x * 9.0) * 1.2);
+        vec2 d2 = normalize(vec2(0.35, -1.0)); g += d2 * 0.00022 * 72.0 * cos(dot(d2, p) * 72.0 + t * 1.9 + 2.1);
+        vec2 d3 = normalize(vec2(-1.0, -0.15)); g += d3 * 0.00012 * 100.0 * cos(dot(d3, p) * 100.0 - t * 2.5);
+        // anisotropic micro-streaks along filter flow
+        float flow = smoothstep(0.05, 0.55, p.x);
+        g += vec2(1.0, 0.15) * flow * 0.006 * cos(p.x * 160.0 - t * 4.2 + sin(p.y * 30.0) * 1.5);
         for (int i = 0; i < 8; i++) {
           vec4 r = uRip[i];
           float age = t - r.z;
           if (age > 0.0 && age < 5.0) {
             vec2 dv = p - r.xy; float rad = length(dv) + 1e-4;
             float front = age * 0.085;
-            float x = (rad - front) * 95.0;
-            float env = exp(-x * x * 0.06) * exp(-age * 0.7) * r.w;
-            g += (dv / rad) * cos(x) * env * 0.045;
+            float x = (rad - front) * 85.0;
+            float env = exp(-x * x * 0.05) * exp(-age * 0.65) * r.w;
+            g += (dv / rad) * cos(x) * env * 0.038;
           }
         }
         return g;
@@ -157,17 +157,19 @@ function createSurface() {
           chop *= 0.55 + 0.45 * abs(sin(hit.x * 31.0 - hit.z * 40.0 + g.y * 90.0));
           chop = smoothstep(0.12, 0.85, chop);
           float bar = softX * softZ * chop * step(0.0, R.y);
-          env += vec3(0.92, 0.98, 1.22) * 3.4 * bar;
+          env += vec3(0.92, 0.98, 1.22) * 2.2 * bar;
           // faint meniscus darkening near the glass walls
           float edgeX = 0.49 - abs(vW.x);
           float edgeZ = 0.20 - abs(vW.z);
-          float meniscus = (1.0 - smoothstep(0.0, 0.042, min(edgeX, edgeZ))) * 0.22;
+          float meniscus = (1.0 - smoothstep(0.0, 0.055, min(edgeX, edgeZ))) * 0.28;
           // subtle darker refraction band along the far (back) edge
           float farBand = smoothstep(0.0, -0.16, vW.z) * (1.0 - F) * 0.18;
-          col = env * F + vec3(0.004, 0.02, 0.028) * (1.0 - F) * 0.6;
-          col -= vec3(0.012, 0.018, 0.022) * meniscus;
+          // softer surface: tone down contrast of env, add film
+          col = env * F * 0.85 + vec3(0.006, 0.028, 0.038) * (1.0 - F) * 0.85;
+          col += vec3(0.02, 0.04, 0.055) * (1.0 - F) * 0.15; // thin surface film
+          col -= vec3(0.010, 0.016, 0.020) * meniscus;
           col -= vec3(0.008, 0.018, 0.024) * farBand;
-          a = clamp(F + 0.045 + meniscus * 0.08, 0.0, 1.0);
+          a = clamp(F * 0.85 + 0.055 + meniscus * 0.10, 0.0, 0.92);
         } else {
           // seen from below: near mirror (total internal reflection) of the tank interior -> dark teal
           col = vec3(0.012, 0.055, 0.072) * (0.6 + 0.4 * ndv) + vec3(0.9, 1.0, 1.2) * 0.02 * pow(ndv, 8.0);

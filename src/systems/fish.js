@@ -69,9 +69,9 @@ function makeMaterial(key, sp, tex, isFin) {
     emissiveIntensity: 0,
     side: isFin ? THREE.DoubleSide : THREE.DoubleSide,
     transparent: isFin,
-    opacity: isFin ? (key === 'angel' ? 0.995 : 0.90) : 1,
+    opacity: isFin ? (key === 'angel' ? 0.92 : 0.88) : 1,
     depthWrite: isFin ? isAngel : !isFin,
-    alphaTest: isFin && isAngel ? 0.08 : 0,
+    alphaTest: isFin && isAngel ? 0.04 : 0,
   });
   // body must stay opaque regardless of map alpha
   if (!isFin) {
@@ -103,6 +103,24 @@ function makeMaterial(key, sp, tex, isFin) {
             `#include <map_fragment>
              diffuseColor.a = 1.0;`
           );
+          if (isNeon) {
+            // angle-dependent neon stripe flash (view-dependent iridescence boost)
+            shader.fragmentShader = shader.fragmentShader.replace(
+              '#include <emissivemap_fragment>',
+              `#include <emissivemap_fragment>
+               { vec3 Vv = normalize(cameraPosition - vWPos);
+                 float flash = pow(1.0 - abs(dot(normal, Vv)), 2.4);
+                 float stripe = smoothstep(0.35, 0.75, diffuseColor.b - diffuseColor.r);
+                 totalEmissiveRadiance += vec3(0.15, 0.55, 0.95) * flash * stripe * 0.85
+                                        + causticAt(vWPos) * diffuseColor.rgb * 0.12; }`
+            );
+          } else {
+            shader.fragmentShader = shader.fragmentShader.replace(
+              '#include <emissivemap_fragment>',
+              `#include <emissivemap_fragment>
+               { totalEmissiveRadiance += causticAt(vWPos) * diffuseColor.rgb * 0.10; }`
+            );
+          }
         },
   });
 }

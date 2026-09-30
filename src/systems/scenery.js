@@ -67,23 +67,32 @@ function makeRock(seed, sx, sy, sz, seg, tone) {
   const s = seed * 7.31;
   for (let i = 0; i < p.count; i++) {
     v.fromBufferAttribute(p, i).normalize();
+    // multi-scale: large form + mid pores + fine chips
     const n = fbm3(v.x * 1.25 + s, v.y * 1.25 + s * 0.5, v.z * 1.25 - s, 4) * 0.34
-            + fbm3(v.x * 4.0 + s, v.y * 4.0, v.z * 4.0 - s, 3) * 0.055
-            + fbm3(v.x * 14 + s, v.y * 14, v.z * 14, 2) * 0.012;
-    let r = 1 + n;
+            + fbm3(v.x * 4.0 + s, v.y * 4.0, v.z * 4.0 - s, 3) * 0.075
+            + fbm3(v.x * 14 + s, v.y * 14, v.z * 14, 2) * 0.022
+            + fbm3(v.x * 32 + s, v.y * 32, v.z * 32, 2) * 0.008;
+    // strata planes (subtle sedimentary bands)
+    const strata = Math.sin((v.y * 3.2 + fbm3(v.x + s, v.z, 0, 2) * 0.4) * 9.0) * 0.012;
+    // chip facets: occasional flattened faces
+    const chip = Math.max(0, fbm3(v.x * 2.2 - s, v.y * 2.2, v.z * 2.2 + s, 2) - 0.55) * 0.06;
+    let r = 1 + n + strata - chip;
     let yy = v.y;
-    if (yy < 0) yy *= 0.8;                      // slightly flatter underside
+    if (yy < 0) yy *= 0.78;
     p.setXYZ(i, v.x * r * sx, yy * r * sy, v.z * r * sz);
-    // colour: mottled stone with pale veins, lichen-dusty tops
-    const m = 0.78 + 0.5 * (fbm3(v.x * 3.2 + s, v.y * 3.2, v.z * 3.2, 3) * 0.5 + 0.5);
+    const m = 0.72 + 0.55 * (fbm3(v.x * 3.2 + s, v.y * 3.2, v.z * 3.2, 3) * 0.5 + 0.5);
     const vein = Math.pow(Math.max(0, 1 - Math.abs(Math.sin((v.x * 2.1 + v.y * 1.3 + fbm3(v.x * 2 + s, v.y * 2, v.z * 2, 2) * 2.2) * 8.0)) * 3.2), 2.0);
-    const top = Math.max(0, v.y) * 0.5;
-    // thin olive-brown biofilm on upper faces, patchy
+    const pore = Math.pow(Math.max(0, fbm3(v.x * 18 + s, v.y * 18, v.z * 18, 2) - 0.4), 1.5);
     const film = Math.max(0, fbm3(v.x * 2.4 - s, v.y * 2.4, v.z * 2.4 + s, 3) + 0.05) * (0.35 + 0.65 * Math.max(0, v.y + 0.25));
-    const rr = tone[0] * m + vein * 0.10, gg = tone[1] * m + vein * 0.10, bb = tone[2] * m + vein * 0.09;
-    col[i * 3] = rr * (1 - film * 0.45) + film * 0.05;
-    col[i * 3 + 1] = gg * (1 - film * 0.18) + film * 0.09;
-    col[i * 3 + 2] = bb * (1 - film * 0.60) + film * 0.018;
+    // waterline stain band (slightly greener/darker mid-height)
+    const stain = Math.exp(-Math.pow((v.y - 0.15) * 4.0, 2.0)) * 0.12;
+    let rr = tone[0] * m + vein * 0.12 - pore * 0.08;
+    let gg = tone[1] * m + vein * 0.10 - pore * 0.05;
+    let bb = tone[2] * m + vein * 0.09 - pore * 0.04;
+    rr = rr * (1 - film * 0.45) + film * 0.05 - stain * 0.04;
+    gg = gg * (1 - film * 0.18) + film * 0.10 + stain * 0.02;
+    bb = bb * (1 - film * 0.60) + film * 0.018 - stain * 0.03;
+    col[i * 3] = rr; col[i * 3 + 1] = gg; col[i * 3 + 2] = bb;
   }
   g.setAttribute('color', new THREE.BufferAttribute(col, 3));
   g.computeVertexNormals();
@@ -194,15 +203,23 @@ function makePlants(rnd) {
       add(x, z, H, 0.0042 + rnd() * 0.0035, 0, { a: rnd() * 6.28, m: 0.22 + rnd() * 0.45 }, rnd() * 6.28, 1.0 + rnd() * 0.8, jitter(cc2, 0.22));
     }
   }
-  // -- foreground carpet (dwarf hairgrass)
+  // -- foreground carpet (dwarf hairgrass) — irregular clumps, not uniform sticks
   const carpetC = [0.09, 0.25, 0.055];
-  const nCarpet = Math.round(3600 * S);
+  const nCarpet = Math.round(3200 * S);
   for (let i = 0; i < nCarpet; i++) {
     const x = -0.48 + rnd() * 0.96;
     const z = -0.02 + rnd() * 0.22;
-    const dens = fbm2(x * 6 + 3, z * 8, 2) + 0.55 - 0.9 * Math.max(0, (z - 0.12)) * 3.0 - Math.max(0, 0.2 - Math.abs(x - 0.10)) * 0.0;
-    if (rnd() > dens) continue;
-    add(x, z, 0.014 + rnd() * rnd() * 0.05, 0.0016 + rnd() * 0.0012, 0, { a: rnd() * 6.28, m: 0.2 + rnd() * 0.6 }, rnd() * 6.28, 0.9 + rnd() * 0.8, jitter(carpetC, 0.3));
+    // patchy density via FBM + clump attractors
+    const dens = fbm2(x * 5 + 3, z * 7, 3) + 0.35
+               - 0.9 * Math.max(0, (z - 0.12)) * 3.0
+               + 0.55 * Math.exp(-(((x + 0.12) / 0.12) ** 2 + ((z - 0.06) / 0.08) ** 2))
+               + 0.45 * Math.exp(-(((x - 0.28) / 0.10) ** 2 + ((z - 0.04) / 0.07) ** 2));
+    if (rnd() > dens * 0.85) continue;
+    const clump = dens > 0.7;
+    add(x, z,
+      clump ? 0.018 + rnd() * rnd() * 0.055 : 0.010 + rnd() * rnd() * 0.035,
+      clump ? 0.0020 + rnd() * 0.0014 : 0.0014 + rnd() * 0.0010,
+      0, { a: rnd() * 6.28, m: 0.15 + rnd() * (clump ? 0.45 : 0.7) }, rnd() * 6.28, 0.9 + rnd() * 0.8, jitter(carpetC, 0.35));
   }
   return { geo, blades, add, jitter };
 }
@@ -296,15 +313,40 @@ export function createScenery(scene) {
       roughness: 0.88, metalness: 0, vertexColors: true,
     }),
     {
-      key: 'sand2',
+      key: 'sand3',
       onShader(shader) {
-        // micro-glints from wet quartz grains catching the LED
+        // bake rock contact list into a small uniform array for AO
+        const nR = Math.min(ROCKS.length, 12);
+        shader.uniforms.uRockN = { value: nR };
+        shader.uniforms.uRocks = { value: ROCKS.slice(0, nR).map((r) => new THREE.Vector4(r[0], r[1], r[2] * 1.15, r[4] * 1.15)) };
+        shader.fragmentShader = shader.fragmentShader.replace(
+          '#include <common>',
+          `#include <common>
+           uniform float uRockN; uniform vec4 uRocks[12];`
+        );
         shader.fragmentShader = shader.fragmentShader.replace(
           '#include <emissivemap_fragment>',
           `#include <emissivemap_fragment>
            { float g = fract(sin(dot(vWPos.xz * 420.0, vec2(12.9898,78.233))) * 43758.5453);
              float glint = step(0.992, g) * pow(max(0.0, causticAt(vWPos).g), 1.4);
              totalEmissiveRadiance += vec3(0.95, 0.92, 0.82) * glint * 0.55; }`
+        );
+        // contact AO under rocks + glass-edge fines
+        shader.fragmentShader = shader.fragmentShader.replace(
+          '#include <lights_fragment_end>',
+          `#include <lights_fragment_end>
+           { float ao = 1.0;
+             for (int i = 0; i < 12; i++) {
+               if (float(i) >= uRockN) break;
+               vec4 rk = uRocks[i];
+               vec2 d = (vWPos.xz - rk.xy) / max(rk.zw, vec2(0.001));
+               float rn = length(d);
+               ao *= 1.0 - 0.55 * smoothstep(1.6, 0.55, rn);
+             }
+             float edge = min(0.49 - abs(vWPos.x), 0.20 - abs(vWPos.z));
+             ao *= 0.78 + 0.22 * smoothstep(0.0, 0.04, edge);
+             reflectedLight.directDiffuse *= ao;
+             reflectedLight.indirectDiffuse *= ao; }`
         );
       },
     }

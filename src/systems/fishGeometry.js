@@ -205,7 +205,7 @@ export function buildFishGeometry(sp, seg = 32, ring = 14) {
 
   // ---- fins — denser grids, curved trailing edges
   // Angel median fins get a tiny ±X slab so grazing angles stay opaque (not paper-thin ghosts).
-  const angelThick = sp === SPECIES.angel ? 0.011 * L : 0;
+  const angelThick = sp === SPECIES.angel ? 0.018 * L : 0;
   const fp = [], ft = [], ff = [], fs = [], fd = [], fuv = [], fi = [];
   const gridFin = (baseFn, outerFn, rows, cols, type, side = 0, curve = 0.18, thick = 0) => {
     const layers = thick > 0 ? [-1, 1] : [0];

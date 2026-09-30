@@ -205,12 +205,12 @@ export function createRoom(scene, renderer) {
       eg.renderOrder = 11;
       tank.add(eg);
     }
-    // top rim polish bevel (thin dark lip)
+    // top rim polish bevel — thin dark lip only (not a hood)
     const rim = new THREE.Mesh(
-      new THREE.BoxGeometry(hw * 2 - 0.01, 0.004, hd * 2 - 0.01),
+      new THREE.BoxGeometry(hw * 2 - 0.004, 0.0022, hd * 2 - 0.004),
       patchRoom(new THREE.MeshStandardMaterial({ color: 0x0a0c10, roughness: 0.35, metalness: 0.4, envMap: envTex, envMapIntensity: 0.6 }), { key: 'rim' })
     );
-    rim.position.set(0, H - 0.002, 0);
+    rim.position.set(0, H - 0.001, 0);
     tank.add(rim);
   }
   // silicone beads (black) at inner corners and bottom seams
@@ -337,9 +337,9 @@ export function createRoom(scene, renderer) {
   sun.shadow.mapSize.set(Q.shadowMap, Q.shadowMap);
   const sc = sun.shadow.camera;
   sc.left = -0.55; sc.right = 0.55; sc.top = 0.26; sc.bottom = -0.26; sc.near = 0.72; sc.far = 1.5;
-  sun.shadow.bias = -0.00035;
-  sun.shadow.normalBias = 0.0035;
-  sun.shadow.radius = Q.name === 'high' ? 8 : 3;
+  sun.shadow.bias = -0.0002;
+  sun.shadow.normalBias = 0.008;
+  sun.shadow.radius = Q.name === 'high' ? 6 : 2;
   scene.add(sun, sun.target);
 
   // 2) room lights — spill of tank glow onto stand/wall/floor + warm lamp + sand bounce

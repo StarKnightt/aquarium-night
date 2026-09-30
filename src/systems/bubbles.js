@@ -85,17 +85,19 @@ export function createBubbles(scene, { water, onEvent } = {}) {
   const bubbles = [];
   for (let i = 0; i < N; i++) bubbles.push({ alive: false, x0: 0, z0: 0, y: 0, r: 0, v: 0, ph: rnd() * 6.28, age: 0, born: 0 });
   let spawnAcc = 0;
-  const rate = Q.name === 'low' ? 6.5 : 9;
+  const rate = Q.name === 'low' ? 7.5 : 12;
 
   function spawn(b, t) {
     b.alive = true;
-    b.x0 = SX + (rnd() - 0.5) * 0.010;
-    b.z0 = SZ + (rnd() - 0.5) * 0.010;
+    // curtain widens as it rises — spawn with slight spread that grows in update
+    b.x0 = SX + (rnd() - 0.5) * 0.016;
+    b.z0 = SZ + (rnd() - 0.5) * 0.014;
     b.y = sandY + 0.014;
-    b.r = 0.0007 + Math.pow(rnd(), 2.0) * 0.0021;     // 0.7 - 2.8 mm radius
-    b.v = 0.15 + b.r * 55;                              // bigger bubbles rise faster (~0.15-0.30 m/s)
+    b.r = 0.0005 + Math.pow(rnd(), 1.7) * 0.0028;     // wider size mix
+    b.v = 0.13 + b.r * 58 + rnd() * 0.04;
     b.ph = rnd() * 6.28;
     b.age = 0;
+    b.spread = 0.6 + rnd() * 1.2;
     if (rnd() < 0.55) onEvent?.('bubble', { x: b.x0, y: b.y, z: b.z0, r: b.r });
   }
 
@@ -113,9 +115,9 @@ export function createBubbles(scene, { water, onEvent } = {}) {
       b.age += dt;
       b.y += b.v * dt;
       const h = b.y - sandY;
-      const wob = 0.0025 + h * 0.012;
-      const x = b.x0 + Math.sin(b.age * 6.0 + b.ph) * wob + Math.sin(b.age * 1.3 + b.ph * 2.0) * 0.004 * h * 4.0;
-      const z = b.z0 + Math.cos(b.age * 5.0 + b.ph) * wob * 0.7;
+      const wob = (0.0025 + h * 0.018) * (b.spread || 1);
+      const x = b.x0 + Math.sin(b.age * 6.0 + b.ph) * wob + Math.sin(b.age * 1.3 + b.ph * 2.0) * 0.005 * h * 4.0;
+      const z = b.z0 + Math.cos(b.age * 5.0 + b.ph) * wob * 0.75;
       const r = b.r * (1 + h * 0.5);
       if (b.y >= TANK.surfaceY - r * 0.5) {
         b.alive = false;
