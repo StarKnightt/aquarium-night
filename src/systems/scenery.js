@@ -100,55 +100,73 @@ function makeRock(seed, sx, sy, sz, seg, tone) {
 }
 
 // ------------------------------------------------------------------------------------------------
-// Plants: one instanced draw call. Every blade is a ribbon evaluated in the vertex shader:
-// lean/curl, lance or tape width, cupping, twist, and gentle multi-frequency sway.
+// Plants: instanced organic leaves — midrib crease, cupped cross-section, serrated edges,
+// tip float at surface, coherent filter-current sway.
 // ------------------------------------------------------------------------------------------------
 const BLADE_VERT_FN = /* glsl */ `
 attribute vec3 iBase; attribute vec4 iP; attribute vec4 iQ; attribute vec3 iCol;
 uniform float uTime;
 uniform float uSurfY;
-varying float vT; varying float vU; varying vec3 vCol;
+varying float vT; varying float vU; varying vec3 vCol; varying float vShape;
 void bladeFrame(float t, float u, out vec3 P, out vec3 N) {
   float H = iP.x, W = iP.y, phase = iP.z, shape = iP.w;
   vec2 lean = iQ.xy; float yaw = iQ.z, stiff = iQ.w;
-  float twist = (fract(phase * 7.31) - 0.5) * 2.2;
+  float isLeaf = step(0.5, shape);
+  float twist = (fract(phase * 7.31) - 0.5) * (2.8 + 1.4 * (1.0 - isLeaf));
   float L2 = dot(lean, lean);
   float k = t * t;
-  vec3 C = vec3(lean.x * 0.95 * k * H, H * (t - 0.25 * L2 * t * t * t), lean.y * 0.95 * k * H);
-  vec3 Tn = normalize(vec3(lean.x * 1.9 * t * H, H * (1.0 - 0.75 * L2 * t * t), lean.y * 1.9 * t * H));
-  // sway: slow drift + secondary wobble + light flutter near the tip, phase-shifted along the blade
+  // tip curl (broad leaves roll back) + tape tip float at surface
+  float tipCurl = isLeaf * smoothstep(0.55, 1.0, t) * (0.018 + 0.012 * fract(phase * 3.7));
+  float tipFloat = (1.0 - isLeaf) * smoothstep(0.78, 1.0, t) * 0.014;
+  vec3 C = vec3(lean.x * 0.95 * k * H, H * (t - 0.28 * L2 * t * t * t) + tipFloat - tipCurl * 0.55, lean.y * 0.95 * k * H);
+  vec3 Tn = normalize(vec3(lean.x * 1.9 * t * H, H * (1.0 - 0.75 * L2 * t * t) + tipFloat * 2.0 - tipCurl, lean.y * 1.9 * t * H));
   float T = uTime;
   vec3 wp = iBase;
+  float current = sin(T * 0.55 + wp.x * 3.2 + wp.z * 2.1) * 0.55 + sin(T * 0.31 + wp.x * 1.4) * 0.45;
   float g1 = sin(T * 0.85 + phase * 6.283 + wp.x * 4.0 + t * 1.6);
   float g2 = sin(T * 0.43 + phase * 11.0 + wp.z * 5.0 - t * 0.9);
   float g3 = sin(T * 2.3 + phase * 23.0 + t * 5.0);
-  float amp = H * k * (0.16 * stiff);
-  C.x += (g1 * 0.65 + g2 * 0.35 + 0.30) * amp + g3 * 0.0045 * k * stiff;
-  C.z += (g2 * 0.6 + sin(T * 0.7 + phase * 5.0) * 0.4) * amp * 0.55;
+  float amp = H * k * (0.14 * stiff);
+  C.x += current * amp * 0.85 + (g1 * 0.55 + g2 * 0.30) * amp + g3 * 0.004 * k * stiff;
+  C.z += (g2 * 0.55 + sin(T * 0.7 + phase * 5.0) * 0.35 + current * 0.25) * amp * 0.55;
   C.y -= (abs(g1) + abs(g2)) * amp * 0.10;
   vec3 S = vec3(cos(yaw + twist * t), 0.0, sin(yaw + twist * t));
   S = normalize(S - Tn * dot(S, Tn));
-  float wTape = W * (1.0 - smoothstep(0.72, 1.0, t) * 0.92);
-  // edge waviness / serration along the blade length
-  float serr = sin(t * 28.0 + phase * 9.0) * 0.07 * W * step(0.5, shape);
-  float lance = sin(pow(t, 0.72) * 3.14159);
-  float wLeaf = W * (0.10 + 0.90 * lance) * mix(0.32, 1.0, smoothstep(0.06, 0.34, t));
-  float w = mix(wTape, wLeaf, step(0.5, shape)) + serr;
+  // width: tape ribbons vs lanceolate leaves; strong serration / waviness on edges
+  float wTape = W * (1.0 - smoothstep(0.68, 1.0, t) * 0.95);
+  float serrT = sin(t * 28.0 + phase * 9.0) * 0.14 + sin(t * 61.0 + phase * 3.0) * 0.06 + sin(t * 97.0) * 0.03;
+  float lance = sin(pow(t, 0.68) * 3.14159);
+  float wLeaf = W * (0.06 + 0.94 * lance) * mix(0.22, 1.0, smoothstep(0.04, 0.30, t));
+  float w = mix(wTape, wLeaf, isLeaf);
+  w *= 1.0 + serrT * mix(0.45, 1.35, isLeaf);
+  // asymmetric lobe (one side slightly wider) for organic look
+  float asym = 1.0 + (u - 0.5) * (0.12 + 0.18 * fract(phase * 5.1)) * isLeaf;
+  w *= asym;
   float uu = u - 0.5;
+  float midFold = abs(uu) * 2.0;
+  float crease = (1.0 - midFold) * (1.0 - midFold);
   float cup = uu * uu * 4.0;
   vec3 N0 = normalize(cross(Tn, S));
-  vec3 pos = C + S * (uu * w) + N0 * (cup * w * 0.22 * step(0.5, shape));
+  // deeper V midrib + stronger cupping; tip curls toward underside — crease soft enough to avoid faceting
+  float thick = (0.0004 + 0.0014 * crease) * mix(0.35, 1.1, isLeaf);
+  float foldAmt = crease * w * mix(0.03, 0.09, isLeaf);
+  float cupAmt = cup * w * mix(0.10, 0.38, isLeaf);
+  float tipRoll = tipCurl * (0.35 + midFold) * isLeaf;
+  vec3 pos = C + S * (uu * w) + N0 * (cupAmt - foldAmt + thick - tipRoll);
   pos += iBase;
-  pos.y = min(pos.y, uSurfY - 0.004);
+  float surfCap = uSurfY - mix(0.0015, 0.004, isLeaf);
+  pos.y = min(pos.y, surfCap);
   P = pos;
-  N = normalize(N0 + S * (uu * cup * 0.9) * step(0.5, shape));
-  vT = t; vU = u; vCol = iCol;
+  // soft crease normals (fragment midrib does the dark line)
+  N = normalize(N0 + S * uu * (0.55 + 0.9 * crease) * isLeaf - N0 * crease * 0.55 * isLeaf + Tn * tipCurl * 1.6);
+  vT = t; vU = u; vCol = iCol; vShape = shape;
 }
 `;
 
 function makePlants(rnd) {
-  // ---- blade templates: 3 columns x rows in [u,t]
-  const rows = 16, cols = 3;
+  // denser cross-section for midrib crease + cupped lamina
+  const rows = Q.name === 'high' ? 22 : 14;
+  const cols = Q.name === 'high' ? 7 : 5;
   const pos = [], idx = [];
   for (let r = 0; r <= rows; r++) for (let c = 0; c < cols; c++) pos.push(c / (cols - 1), r / rows, 0);
   for (let r = 0; r < rows; r++) for (let c = 0; c < cols - 1; c++) {
@@ -166,50 +184,74 @@ function makePlants(rnd) {
     blades.push([x, y, z, H, W, rnd(), shape, Math.cos(lean.a) * lean.m, Math.sin(lean.a) * lean.m, yaw, stiff, col[0], col[1], col[2]]);
   };
   const jitter = (c, a = 0.14) => [c[0] * (1 + (rnd() - 0.5) * a * 2), c[1] * (1 + (rnd() - 0.5) * a * 2), c[2] * (1 + (rnd() - 0.5) * a * 2)];
+  // hue along age: tip yellower / base deeper
+  const ageTint = (base, tipY) => {
+    const t = rnd();
+    return [
+      base[0] * (1 - tipY * 0.15) + 0.12 * tipY * t,
+      base[1] * (1 - tipY * 0.05) + 0.04 * tipY,
+      base[2] * (1 - tipY * 0.25),
+    ];
+  };
 
-  // -- tape grass (vallisneria), background clusters
-  const tapeC = [0.050, 0.200, 0.045];
-  const tapeClusters = [[-0.44, -0.15, 0.07, 46], [0.43, -0.14, 0.065, 42], [-0.10, -0.18, 0.06, 26], [0.17, -0.185, 0.06, 22], [-0.30, -0.185, 0.05, 20], [0.0, -0.19, 0.05, 12]];
+  // -- tape grass (vallisneria): twisty ribbons, some tips float
+  const tapeC = [0.045, 0.195, 0.042];
+  const tapeClusters = [[-0.44, -0.15, 0.07, 40], [0.43, -0.14, 0.065, 36], [-0.10, -0.18, 0.06, 22], [0.17, -0.185, 0.06, 18], [-0.30, -0.185, 0.05, 16], [0.0, -0.19, 0.05, 10]];
   for (const [cx, cz, rr, n] of tapeClusters) {
     for (let i = 0; i < Math.round(n * S + 2); i++) {
       const a = rnd() * 6.28, d = Math.sqrt(rnd()) * rr;
       const x = cx + Math.cos(a) * d, z = cz + Math.sin(a) * d * 0.6;
       const base = sandHeight(x, z);
-      const H = Math.min(0.09 + Math.pow(rnd(), 1.4) * 0.31, TANK.surfaceY - base - 0.03 + (rnd() < 0.15 ? 0.05 : 0));
-      add(x, z, H, 0.0075 + rnd() * 0.007, 0, { a: rnd() * 6.28, m: 0.18 + rnd() * 0.62 }, rnd() * 6.28, 0.7 + rnd() * 0.6, jitter(tapeC, 0.25));
+      const reach = rnd() < 0.22;
+      const H = Math.min(0.10 + Math.pow(rnd(), 1.35) * 0.30, TANK.surfaceY - base - (reach ? 0.002 : 0.028));
+      add(x, z, H, 0.008 + rnd() * 0.007, 0, { a: rnd() * 6.28, m: 0.22 + rnd() * 0.70 }, rnd() * 6.28, 0.65 + rnd() * 0.7, ageTint(jitter(tapeC, 0.28), rnd() * 0.5));
     }
   }
-  // -- amazon sword rosettes
-  const swordC = [0.045, 0.165, 0.038];
-  const swords = [[0.04, -0.115, 1.0], [0.24, -0.14, 0.8], [-0.43, -0.09, 0.85]];
+  // -- amazon sword / broad leaves: odd-count rosettes
+  const swordC = [0.040, 0.175, 0.036];
+  const swords = [[0.04, -0.115, 1.0], [0.24, -0.14, 0.85], [-0.43, -0.09, 0.9]];
   for (const [cx, cz, sc] of swords) {
-    const n = Math.round((11 * S) + 4);
+    const n = Math.round((9 * S) + 5) | 1; // odd
     for (let i = 0; i < n; i++) {
-      const a = (i / n) * 6.28 + rnd() * 0.5;
-      const H = (0.13 + rnd() * 0.12) * sc;
-      add(cx + Math.cos(a) * 0.006, cz + Math.sin(a) * 0.006, H, (0.046 + rnd() * 0.022) * sc, 1, { a, m: 0.45 + rnd() * 0.5 }, a + 1.57, 0.5 + rnd() * 0.3, jitter(swordC, 0.18));
+      const a = (i / n) * 6.28 + rnd() * 0.45;
+      const H = (0.12 + rnd() * 0.14) * sc;
+      const tip = rnd() < 0.25 ? 0.55 : rnd() * 0.3;
+      add(cx + Math.cos(a) * 0.007, cz + Math.sin(a) * 0.007, H, (0.048 + rnd() * 0.028) * sc, 1, { a, m: 0.40 + rnd() * 0.55 }, a + 1.57, 0.45 + rnd() * 0.35, ageTint(jitter(swordC, 0.2), tip));
     }
   }
-  // -- red stem plant bunches (rotala-like), thin blades in tight whorls
-  const redC = [0.22, 0.085, 0.055];
-  const redBunches = [[0.385, -0.115, 0.032, 60], [0.465, -0.06, 0.022, 26], [-0.26, -0.14, 0.03, 34]];
-  for (const [cx, cz, rr, n] of redBunches) {
-    for (let i = 0; i < Math.round(n * S + 3); i++) {
-      const a = rnd() * 6.28, d = Math.sqrt(rnd()) * rr;
-      const x = cx + Math.cos(a) * d, z = cz + Math.sin(a) * d;
-      const H = 0.10 + rnd() * 0.17;
-      const mixG = Math.pow(rnd(), 1.8);
-      const cc2 = [redC[0] * (1 - mixG * 0.6) + 0.02 * mixG, redC[1] * (1 - mixG) + 0.11 * mixG, redC[2] + 0.01 * mixG];
-      add(x, z, H, 0.0042 + rnd() * 0.0035, 0, { a: rnd() * 6.28, m: 0.22 + rnd() * 0.45 }, rnd() * 6.28, 1.0 + rnd() * 0.8, jitter(cc2, 0.22));
+  // -- rotala-like: visible stem nodes + tiered leaf whorls
+  const redC = [0.24, 0.080, 0.050];
+  const stemC = [0.12, 0.06, 0.03];
+  const redBunches = [[0.385, -0.115, 0.028, 5], [0.465, -0.06, 0.020, 3], [-0.26, -0.14, 0.026, 4]];
+  for (const [cx, cz, rr, stems] of redBunches) {
+    for (let s = 0; s < Math.round(stems * S + 1); s++) {
+      const sa = rnd() * 6.28, sd = Math.sqrt(rnd()) * rr;
+      const sx = cx + Math.cos(sa) * sd, sz = cz + Math.sin(sa) * sd;
+      const stemH = 0.12 + rnd() * 0.16;
+      // thin stem ribbon (node structure via slight width pulses in shader via phase)
+      add(sx, sz, stemH, 0.0016 + rnd() * 0.0006, 0,
+        { a: rnd() * 6.28, m: 0.08 + rnd() * 0.18 }, rnd() * 6.28, 0.35 + rnd() * 0.2, jitter(stemC, 0.15));
+      const whorls = 5 + Math.floor(rnd() * 5);
+      for (let w = 0; w < whorls; w++) {
+        const wt = (w + 0.5) / whorls;
+        const nLeaf = 3 + (rnd() < 0.4 ? 1 : 0);
+        for (let L = 0; L < nLeaf; L++) {
+          const a = (L / nLeaf) * 6.28 + w * 0.4 + rnd() * 0.2;
+          const leafH = stemH * (0.08 + 0.10 * (1 - wt) + rnd() * 0.04);
+          add(sx + Math.cos(a) * 0.003, sz + Math.sin(a) * 0.003, leafH, 0.005 + rnd() * 0.004, 0,
+            { a, m: 0.35 + rnd() * 0.5 }, a + 1.2, 1.1 + rnd() * 0.6,
+            ageTint(jitter([redC[0] * (1 - wt * 0.3) + 0.02 * wt, redC[1] * (1 - wt) + 0.12 * wt, redC[2]], 0.2), wt * 0.4),
+            stemH * wt * 0.85);
+        }
+      }
     }
   }
-  // -- foreground carpet (dwarf hairgrass) — irregular clumps, not uniform sticks
-  const carpetC = [0.09, 0.25, 0.055];
-  const nCarpet = Math.round(3200 * S);
+  // -- foreground carpet clumps
+  const carpetC = [0.08, 0.26, 0.050];
+  const nCarpet = Math.round(2800 * S);
   for (let i = 0; i < nCarpet; i++) {
     const x = -0.48 + rnd() * 0.96;
     const z = -0.02 + rnd() * 0.22;
-    // patchy density via FBM + clump attractors
     const dens = fbm2(x * 5 + 3, z * 7, 3) + 0.35
                - 0.9 * Math.max(0, (z - 0.12)) * 3.0
                + 0.55 * Math.exp(-(((x + 0.12) / 0.12) ** 2 + ((z - 0.06) / 0.08) ** 2))
@@ -217,9 +259,9 @@ function makePlants(rnd) {
     if (rnd() > dens * 0.85) continue;
     const clump = dens > 0.7;
     add(x, z,
-      clump ? 0.018 + rnd() * rnd() * 0.055 : 0.010 + rnd() * rnd() * 0.035,
-      clump ? 0.0020 + rnd() * 0.0014 : 0.0014 + rnd() * 0.0010,
-      0, { a: rnd() * 6.28, m: 0.15 + rnd() * (clump ? 0.45 : 0.7) }, rnd() * 6.28, 0.9 + rnd() * 0.8, jitter(carpetC, 0.35));
+      clump ? 0.016 + rnd() * rnd() * 0.05 : 0.009 + rnd() * rnd() * 0.03,
+      clump ? 0.0022 + rnd() * 0.0015 : 0.0015 + rnd() * 0.0010,
+      0, { a: rnd() * 6.28, m: 0.12 + rnd() * (clump ? 0.4 : 0.65) }, rnd() * 6.28, 0.9 + rnd() * 0.8, jitter(carpetC, 0.4));
   }
   return { geo, blades, add, jitter };
 }
@@ -238,33 +280,49 @@ function bladeMaterials() {
       )
       .replace('#include <begin_vertex>', 'vec3 transformed = bP;');
   const mat = patchWater(
-    new THREE.MeshStandardMaterial({ roughness: 0.42, metalness: 0.0, side: THREE.DoubleSide }),
+    new THREE.MeshPhysicalMaterial({
+      roughness: 0.32, metalness: 0.0, side: THREE.DoubleSide,
+      clearcoat: 0.35, clearcoatRoughness: 0.55,
+      sheen: 0.4, sheenRoughness: 0.65, sheenColor: new THREE.Color(0.45, 0.7, 0.25),
+    }),
     {
-      key: 'blade', soft: 0.8,
+      key: 'blade5', soft: 0.95,
       vertex,
-      extraFrag: 'varying float vT; varying float vU; varying vec3 vCol;',
+      extraFrag: 'varying float vT; varying float vU; varying vec3 vCol; varying float vShape;',
       onShader(shader) {
         shader.uniforms.uSurfY = { value: TANK.surfaceY };
         shader.fragmentShader = shader.fragmentShader.replace(
           '#include <color_fragment>',
           `#include <color_fragment>
-           // midrib + lateral veins + slight edge darkening
-           float midrib = 1.0 - 0.38 * smoothstep(0.07, 0.0, abs(vU - 0.5));
-           float veinL = 0.92 + 0.08 * sin(vT * 48.0 + vU * 6.0);
-           float edge = smoothstep(0.0, 0.08, vU) * smoothstep(1.0, 0.92, vU);
-           // yellowed old tips + age mottling
-           float age = smoothstep(0.72, 1.0, vT) * 0.55 + 0.15 * fract(sin(vCol.g * 40.0) * 20.0);
-           vec3 old = mix(vCol, vec3(0.22, 0.16, 0.04), age * 0.55);
-           diffuseColor.rgb *= old * midrib * veinL * mix(0.78, 1.55, smoothstep(0.0, 1.0, vT)) * (0.75 + 0.25 * edge);`
+           float mid = abs(vU - 0.5);
+           float midrib = mix(0.42, 1.0, smoothstep(0.0, 0.085, mid));
+           float vLat = abs(sin(vT * 36.0 + (vU - 0.5) * 9.0));
+           float vein = mix(0.72, 1.0, smoothstep(0.0, 0.18, vLat));
+           float vein2 = mix(0.88, 1.0, smoothstep(0.0, 0.25, abs(sin(vT * 72.0 + mid * 14.0))));
+           float edge = smoothstep(0.0, 0.04, vU) * smoothstep(1.0, 0.96, vU);
+           vec3 tipCol = mix(vCol, vec3(0.26, 0.36, 0.08), 0.6);
+           vec3 baseCol = mix(vCol, vec3(0.012, 0.05, 0.012), 0.45);
+           vec3 leaf = mix(baseCol, tipCol, smoothstep(0.1, 0.9, vT));
+           float age = smoothstep(0.72, 1.0, vT) * (0.3 + 0.7 * fract(sin(vCol.g * 41.0) * 19.0));
+           leaf = mix(leaf, vec3(0.32, 0.24, 0.07), age * 0.65);
+           float fleck = step(0.96, fract(sin(dot(vec2(vT, vU) * 36.0 + vCol.r, vec2(12.9, 78.2))) * 43758.5));
+           leaf = mix(leaf, vec3(0.04, 0.09, 0.025), fleck * 0.7);
+           float mott = 0.9 + 0.1 * sin(vT * 17.0 + vU * 29.0 + vCol.b * 40.0);
+           float hole = step(0.5, vShape) * step(0.988, fract(sin(dot(vec2(vT * 8.2, vU * 10.2), vec2(91.7, 53.1))) * 23421.0));
+           if (hole > 0.5) discard;
+           float bite = step(0.5, vShape) * step(0.992, fract(sin(dot(vec2(vT * 22.0, floor(vU * 2.0)), vec2(41.2, 17.9))) * 9123.0));
+           if (bite > 0.5 && mid > 0.38) discard;
+           diffuseColor.rgb *= leaf * midrib * vein * vein2 * mott * (0.68 + 0.32 * edge) * mix(0.85, 1.55, vT);`
         );
-        // stronger translucency / backlight glow
         shader.fragmentShader = shader.fragmentShader.replace(
           '#include <emissivemap_fragment>',
           `#include <emissivemap_fragment>
            { float dpt = max(uBoxMax.y - vWPos.y, 0.0);
-             vec3 tl = diffuseColor.rgb * vec3(1.25, 1.2, 0.5) * causticAt(vWPos) * exp(-dpt * 1.15);
-             float thin = 0.85 + 0.75 * (1.0 - abs(vU - 0.5) * 2.0);
-             totalEmissiveRadiance += tl * thin * (0.85 + 0.9 * smoothstep(0.08, 1.0, vT)) * 1.05; }`
+             float thin = 0.35 + 1.55 * smoothstep(0.0, 0.42, abs(vU - 0.5));
+             vec3 tl = diffuseColor.rgb * vec3(1.55, 1.4, 0.35) * causticAt(vWPos) * exp(-dpt * 0.85);
+             totalEmissiveRadiance += tl * thin * (0.55 + 1.2 * smoothstep(0.03, 1.0, vT)) * 1.55;
+             float sheen = pow(max(0.0, causticAt(vWPos, 1.7).g), 2.0);
+             totalEmissiveRadiance += vec3(0.9, 1.0, 0.7) * sheen * 0.18 * thin; }`
         );
       },
     }
@@ -277,7 +335,7 @@ function bladeMaterials() {
       .replace('#include <common>', '#include <common>\n' + BLADE_VERT_FN)
       .replace('#include <begin_vertex>', 'vec3 bP, bN; bladeFrame(position.y, position.x, bP, bN); vec3 transformed = bP;');
   };
-  depthMat.customProgramCacheKey = () => 'bladeDepth';
+  depthMat.customProgramCacheKey = () => 'bladeDepth5';
   return { mat, depthMat };
 }
 
@@ -393,17 +451,28 @@ export function createScenery(scene) {
 
   // ---- plants
   const P = makePlants(rnd);
-  // java fern / anubias leaves on the two big stones
-  const fernC = [0.030, 0.115, 0.032];
-  const fernOn = [[rocks[0], 14, 0.95], [rocks[3], 10, 0.85], [rocks[1], 8, 0.75]];
-  for (const [rk, n, sc] of fernOn) {
-    for (let i = 0; i < Math.round(n * Q.plantScale + 2); i++) {
-      const a = rnd() * 6.28;
-      const side = rnd() < 0.6;   // crevice on the flank vs crown
-      const rr = side ? 0.78 : 0.25;
-      const rx = rk.x + Math.cos(a) * rk.sx * rr, rz = rk.z + Math.sin(a) * rk.sz * rr;
-      const yy = side ? rk.y + rk.sy * (0.10 + rnd() * 0.5) : rk.top - 0.012;
-      P.add(rx, rz, (0.050 + rnd() * 0.055) * sc, (0.024 + rnd() * 0.014) * sc, 1, { a, m: 0.7 + rnd() * 0.5 }, a + 1.57, 0.5, P.jitter(fernC, 0.2), 0, yy);
+  // java fern / anubias: rhizome-hugging clumps on stones (horizontal creep + broad fronds)
+  const fernC = [0.028, 0.105, 0.028];
+  const anubiasC = [0.035, 0.145, 0.040];
+  const fernOn = [[rocks[0], 16, 1.0, true], [rocks[3], 12, 0.9, false], [rocks[1], 10, 0.8, true]];
+  for (const [rk, n, sc, isAnub] of fernOn) {
+    // rhizome path along rock flank
+    const rhizA0 = rnd() * 6.28;
+    const rhizLen = 0.55 + rnd() * 0.35;
+    const nLeaf = Math.round(n * Q.plantScale + 3);
+    for (let i = 0; i < nLeaf; i++) {
+      const t = i / Math.max(1, nLeaf - 1);
+      const a = rhizA0 + t * rhizLen + (rnd() - 0.5) * 0.35;
+      const side = rnd() < 0.72;
+      const rr = side ? 0.72 + rnd() * 0.18 : 0.18 + rnd() * 0.2;
+      const rx = rk.x + Math.cos(a) * rk.sx * rr;
+      const rz = rk.z + Math.sin(a) * rk.sz * rr;
+      const yy = side ? rk.y + rk.sy * (0.08 + t * 0.42 + rnd() * 0.12) : rk.top - 0.01 - rnd() * 0.008;
+      const col = isAnub ? anubiasC : fernC;
+      // anubias: broader shorter; fern: longer lanceolate
+      const H = isAnub ? (0.038 + rnd() * 0.042) * sc : (0.055 + rnd() * 0.065) * sc;
+      const W = isAnub ? (0.032 + rnd() * 0.022) * sc : (0.018 + rnd() * 0.014) * sc;
+      P.add(rx, rz, H, W, 1, { a: a + (rnd() - 0.5) * 0.8, m: 0.55 + rnd() * 0.55 }, a + 1.57 + (rnd() - 0.5) * 0.4, 0.42 + rnd() * 0.25, P.jitter(col, 0.22), 0, yy);
     }
   }
   const nB = P.blades.length;
