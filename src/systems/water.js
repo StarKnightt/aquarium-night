@@ -284,11 +284,12 @@ function createParticles() {
         gl_PointSize = clamp((0.0009 + aSeed.w * aSeed.w * 0.0034) * uPx * 900.0 / dist, 1.0, 5.0);
         float depth = uBoxMax.y - p.y;
         float shaft = textureLod(uCaust, vec2(p.x * 1.4 + 0.13, p.y * 0.1 + p.z * 0.2), 1.8).g;
-        float lightAmt = exp(-depth * 1.8) * (0.25 + 1.4 * pow(clamp(shaft, 0.0, 2.0), 1.7));
+        // micro-haze mostly inside shafts (not a uniform fog of dots)
+        float shaftPow = pow(clamp(shaft, 0.0, 2.5), 2.1);
+        float lightAmt = exp(-depth * 1.8) * (0.08 + 2.2 * shaftPow);
         float tw = 0.6 + 0.4 * sin(t * (0.6 + aSeed.x * 1.5) + aSeed.z * 60.0);
-        // fade near glass faces so they do not pop
         float edge = smoothstep(0.0, 0.05, min(uBoxMax.x - abs(p.x), uBoxMax.z - abs(p.z)));
-        vA = lightAmt * tw * edge * (0.25 + 0.75 * aSeed.y);
+        vA = lightAmt * tw * edge * (0.2 + 0.8 * aSeed.y);
       }`,
     fragmentShader: /* glsl */ `
       varying float vA; varying vec3 vWp;

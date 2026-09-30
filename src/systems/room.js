@@ -31,7 +31,7 @@ const glassMat = () =>
     blendSrc: THREE.OneFactor,
     blendDst: THREE.OneMinusSrcAlphaFactor,
     side: THREE.DoubleSide,
-    uniforms: { uThick: { value: 0.022 } },
+    uniforms: { uThick: { value: 0.028 } },
     vertexShader: /* glsl */ `
       varying vec3 vN; varying vec3 vW;
       void main() {
@@ -51,32 +51,42 @@ const glassMat = () =>
         vec3 V = normalize(cameraPosition - vW);
         if (!gl_FrontFacing) N = -N;
         float ndv = clamp(abs(dot(N, V)), 0.0, 1.0);
-        float F = 0.055 + 0.945 * pow(1.0 - ndv, 4.6);
+        float F = 0.06 + 0.94 * pow(1.0 - ndv, 4.4);
         // micro-waviness + hard-water spots bump the normal
-        float spot = smoothstep(0.72, 0.95, vn(vW.xy * 38.0 + 1.7) * 0.55 + vn(vW.xy * 90.0) * 0.45);
-        float finger = smoothstep(0.78, 0.98, vn(vW.xy * 9.0 + 4.0)) * smoothstep(0.5, 0.9, vn(vW.xy * 3.2));
-        N = normalize(N + 0.004 * vec3(vn(vW.xy * 7.0) - 0.5, vn(vW.yz * 6.0) - 0.5, vn(vW.zx * 5.0) - 0.5)
-                        + 0.012 * spot * vec3(0.0, 0.4, 0.0));
+        float spot = smoothstep(0.70, 0.96, vn(vW.xy * 38.0 + 1.7) * 0.55 + vn(vW.xy * 90.0) * 0.45);
+        float finger = smoothstep(0.74, 0.98, vn(vW.xy * 9.0 + 4.0)) * smoothstep(0.45, 0.92, vn(vW.xy * 3.2));
+        // drip streaks: vertical gravity runs
+        float drip = abs(sin(vW.x * 42.0 + vn(vec2(vW.x * 6.0, 2.0)) * 5.0));
+        drip = smoothstep(0.88, 1.0, drip) * smoothstep(0.08, 0.35, vW.y) * (1.0 - smoothstep(0.38, 0.46, vW.y));
+        N = normalize(N + 0.005 * vec3(vn(vW.xy * 7.0) - 0.5, vn(vW.yz * 6.0) - 0.5, vn(vW.zx * 5.0) - 0.5)
+                        + 0.014 * spot * vec3(0.0, 0.4, 0.0)
+                        + 0.008 * drip * vec3(0.0, -0.6, 0.0));
         vec3 R = reflect(-V, N);
-        // room reflections: stronger so a dim living room reads in the pane from a distance
-        vec3 refl = roomEnv(R) * (F * 4.2 + 0.035);
-        // warm lamp blob in the right-hand reflection, cool window in the left
+        vec3 refl = roomEnv(R) * (F * 4.6 + 0.04);
+        // warm lamp (right) + cool window (left) + tank LED bar (overhead)
         float lampBlob = pow(max(0.0, R.x * 0.55 + R.y * 0.35 + 0.15), 8.0);
         float winBlob = pow(max(0.0, -R.x * 0.4 + R.y * 0.5 + 0.05), 10.0);
-        refl += vec3(1.0, 0.55, 0.22) * lampBlob * F * 1.4;
-        refl += vec3(0.25, 0.40, 0.75) * winBlob * F * 0.55;
-        // dust / salt creep near rim + fingerprints
+        float ledBlob = pow(max(0.0, R.y * 0.85 - abs(R.x) * 0.25 + 0.05), 14.0);
+        refl += vec3(1.0, 0.55, 0.22) * lampBlob * F * 1.55;
+        refl += vec3(0.25, 0.40, 0.75) * winBlob * F * 0.6;
+        refl += vec3(0.85, 0.95, 1.15) * ledBlob * F * 1.8;
+        // corner biofilm / algae haze (inner corners, lower)
+        float cx = 0.48 - abs(vW.x);
+        float cz = 0.195 - abs(vW.z);
+        float corner = (1.0 - smoothstep(0.0, 0.09, min(cx, cz))) * (1.0 - smoothstep(0.22, 0.40, vW.y));
+        float bio = corner * (0.4 + 0.6 * vn(vW.xz * 22.0));
+        // dust / salt creep near rim + fingerprints + drips
         float nearRim = smoothstep(0.32, 0.44, vW.y) * (1.0 - smoothstep(0.44, 0.48, vW.y));
         float sm = spot * (0.35 + 0.65 * vn(vW.xy * 4.0));
-        vec3 dust = vec3(0.62, 0.70, 0.88) * (sm * 0.016 + finger * 0.022 + nearRim * sm * 0.04) * step(0.35, abs(N.z));
-        // condensation streaks under the light (upper third of front glass)
-        float streak = abs(sin(vW.x * 55.0 + vn(vec2(vW.x * 8.0, 0.0)) * 4.0)) ;
+        vec3 dust = vec3(0.62, 0.70, 0.88) * (sm * 0.02 + finger * 0.032 + nearRim * sm * 0.05 + drip * 0.025) * step(0.35, abs(N.z));
+        dust += vec3(0.18, 0.32, 0.16) * bio * 0.07;
+        float streak = abs(sin(vW.x * 55.0 + vn(vec2(vW.x * 8.0, 0.0)) * 4.0));
         streak = smoothstep(0.82, 1.0, streak) * smoothstep(0.28, 0.42, vW.y) * (1.0 - smoothstep(0.42, 0.48, vW.y));
-        dust += vec3(0.7, 0.85, 1.0) * streak * 0.018 * step(0.5, abs(N.z));
+        dust += vec3(0.7, 0.85, 1.0) * streak * 0.022 * step(0.5, abs(N.z));
         float gr = max(1.0 / max(ndv, 0.025) - 1.0, 0.0);
-        float ab = 1.0 - exp(-gr * uThick * 42.0);
-        vec3 tint = vec3(0.06, 0.42, 0.28) * ab * 0.10;
-        float a = clamp(F * 0.72 + ab * 0.38 + 0.006 + sm * 0.014 + finger * 0.02, 0.0, 0.94);
+        float ab = 1.0 - exp(-gr * uThick * 48.0);
+        vec3 tint = vec3(0.05, 0.40, 0.26) * ab * 0.14;
+        float a = clamp(F * 0.76 + ab * 0.42 + 0.008 + sm * 0.018 + finger * 0.028 + bio * 0.04, 0.0, 0.95);
         gl_FragColor = vec4(refl + tint + dust, a);
       }`,
   });
@@ -193,17 +203,29 @@ export function createRoom(scene, renderer) {
     m.renderOrder = 10;
     tank.add(m);
   }
-  // visible green glass edge strips at vertical corners (iron glass look)
+  // visible green glass edge strips at vertical corners (iron glass look) + bevel faces
   {
     const edgeMat = new THREE.MeshBasicMaterial({
-      color: new THREE.Color(0.12, 0.42, 0.28), transparent: true, opacity: 0.55, depthWrite: false, toneMapped: true,
+      color: new THREE.Color(0.10, 0.38, 0.26), transparent: true, opacity: 0.72, depthWrite: false, toneMapped: true,
+    });
+    const bevelMat = new THREE.MeshBasicMaterial({
+      color: new THREE.Color(0.08, 0.28, 0.20), transparent: true, opacity: 0.45, depthWrite: false, toneMapped: true,
     });
     const eh = H - g;
     for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
-      const eg = new THREE.Mesh(new THREE.BoxGeometry(0.0035, eh, 0.0035), edgeMat);
-      eg.position.set(sx * (hw - g * 0.15), g + eh / 2, sz * (hd - g * 0.15));
+      const eg = new THREE.Mesh(new THREE.BoxGeometry(0.0042, eh, 0.0042), edgeMat);
+      eg.position.set(sx * (hw - g * 0.12), g + eh / 2, sz * (hd - g * 0.12));
       eg.renderOrder = 11;
       tank.add(eg);
+      // outer bevel chamfer strip (reads as thick glass edge)
+      const bv = new THREE.Mesh(new THREE.BoxGeometry(0.0065, eh * 0.98, 0.0012), bevelMat);
+      bv.position.set(sx * (hw - 0.001), g + eh / 2, sz * (hd - g * 0.5));
+      bv.renderOrder = 11;
+      tank.add(bv);
+      const bh = new THREE.Mesh(new THREE.BoxGeometry(0.0012, eh * 0.98, 0.0065), bevelMat);
+      bh.position.set(sx * (hw - g * 0.5), g + eh / 2, sz * (hd - 0.001));
+      bh.renderOrder = 11;
+      tank.add(bh);
     }
     // top rim polish bevel — thin dark lip only (not a hood)
     const rim = new THREE.Mesh(

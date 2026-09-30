@@ -17,8 +17,8 @@ export const WU = {
   uCaustGain: { value: 0.68 },
   uDbg: { value: 0 },
   uRoomAmbient: { value: new THREE.Color(0.012, 0.014, 0.018) },
-  uAbsorb: { value: new THREE.Vector3(0.50, 0.22, 0.18) },
-  uScatter: { value: new THREE.Color(0.028, 0.055, 0.062) },
+  uAbsorb: { value: new THREE.Vector3(0.58, 0.26, 0.20) },
+  uScatter: { value: new THREE.Color(0.036, 0.068, 0.072) },
   // teal sky-like fill: shadows should only go ~40-60% dark
   uAmbient: { value: new THREE.Color(0.24, 0.32, 0.36) },
   uShadowFloor: { value: 0.58 },
@@ -79,11 +79,13 @@ vec3 waterFog(vec3 col, vec3 p) {
   float te = max(max(tmin.x, tmin.y), max(tmin.z, 0.0));
   float tx = min(min(tmax.x, tmax.y), min(tmax.z, 1.0));
   float len = max(tx - te, 0.0) * length(rd);
-  vec3 T = exp(-uAbsorb * len);
-  // mid-ray height -> more glow near the light
+  // slight bluish-green turbidity growing with path length through water
+  vec3 absorb = uAbsorb * (1.0 + 0.35 * clamp(len * 1.4, 0.0, 1.2));
+  vec3 T = exp(-absorb * len);
   vec3 mid = ro + rd * (0.5 * (te + tx));
   float h = clamp((mid.y - uBoxMin.y) / (uBoxMax.y - uBoxMin.y), 0.0, 1.0);
-  vec3 scat = uScatter * (0.35 + 0.95 * h) * (vec3(1.0) - T);
+  vec3 scat = uScatter * (0.40 + 1.05 * h) * (vec3(1.0) - T);
+  scat *= vec3(0.85, 1.05, 1.12); // teal bias in the haze
   return col * T + scat;
 }
 `;

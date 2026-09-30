@@ -94,14 +94,16 @@ const PhotoShader = {
         vec2 local = (uv - tc) / max(th, vec2(1e-4));
         float inside = float(abs(local.x) < 1.0 && abs(local.y) < 1.0);
         float edge = 1.0 - max(abs(local.x), abs(local.y));
-        float mag = 0.965 + 0.02 * smoothstep(0.0, 0.15, edge); // slightly narrower FOV inside
+        // noticeable n≈1.33 magnification; stronger near vertical glass edges
+        float mag = 0.945 + 0.035 * smoothstep(0.0, 0.22, edge);
         vec2 refr = tc + (uv - tc) * mix(1.0, mag, inside);
-        // stronger lateral shift near left/right glass edges (thickness kink)
-        float side = smoothstep(0.12, 0.0, abs(abs(local.x) - 1.0)) * inside;
-        refr.x += local.x * side * 0.012;
-        // waterline kink: horizontal seam near top of water
-        float wl = smoothstep(0.06, 0.0, abs(local.y - 0.72)) * inside;
-        refr.y -= wl * 0.008;
+        float side = smoothstep(0.18, 0.0, abs(abs(local.x) - 1.0)) * inside;
+        refr.x += local.x * side * 0.028;
+        refr.y += side * local.y * 0.006;
+        // waterline kink
+        float wl = smoothstep(0.09, 0.0, abs(local.y - 0.70)) * inside;
+        refr.y -= wl * 0.014;
+        refr.x += wl * local.x * 0.006;
         uv = mix(uv, refr, uRefract);
       }
       vec2 off = d * r2 * uCA * 7.0;
