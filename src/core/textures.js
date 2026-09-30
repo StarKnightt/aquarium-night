@@ -76,7 +76,7 @@ export function makeWall({ w = 512, h = 512, base = [78, 86, 96], seed = 9 } = {
 
 /**
  * Fine aquarium sand: albedo + normal map from a grain heightfield.
- * Mix of pale quartz, beige, grey and a few dark grains.
+ * Mix of pale quartz, beige, grey and a few dark grains; sparse sparkle pits.
  */
 export function makeSand(size = 1024, seed = 21) {
   const rnd = mulberry32(seed);
@@ -84,25 +84,61 @@ export function makeSand(size = 1024, seed = 21) {
   const c = makeCanvas(size, size);
   const ctx = c.getContext('2d');
   const img = ctx.createImageData(size, size);
+  // grain size classes: fine / medium / coarse / dark grit / pale quartz
   const palette = [
     [176, 152, 116], [160, 138, 104], [188, 168, 132], [132, 116, 92],
     [204, 190, 160], [112, 100, 84], [64, 58, 50], [170, 148, 112],
+    [220, 210, 190], [90, 82, 70], [148, 130, 100], [195, 175, 145],
   ];
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
       const i = y * size + x;
       const u = x / size, v = y / size;
+      // grain-size distribution via multi-scale noise
+      const fine = noise2(u * 380 + seed, v * 380) * 0.5 + 0.5;
+      const med = fbm2(u * 55 + 3, v * 55, 2) * 0.5 + 0.5;
+      const coarse = fbm2(u * 14 + 9, v * 14, 3) * 0.5 + 0.5;
       const g = rnd();
-      const p = palette[Math.floor(Math.pow(rnd(), 1.6) * palette.length)];
+      let pIdx = Math.floor(Math.pow(g, 1.35) * (palette.length - 2));
+      if (fine > 0.92) pIdx = 8; // pale quartz
+      if (g > 0.97) pIdx = 6; // dark grit
+      if (coarse > 0.88 && g > 0.6) pIdx = Math.min(palette.length - 1, pIdx + 2);
+      const p = palette[pIdx];
       const patch = fbm2(u * 9, v * 9, 3) * 0.5 + 0.5;
-      const jitter = 0.78 + g * 0.4;
-      const k = jitter * (0.94 + patch * 0.0);
-      img.data[i * 4] = p[0] * k;
-      img.data[i * 4 + 1] = p[1] * k;
-      img.data[i * 4 + 2] = p[2] * k;
+      const jitter = 0.74 + fine * 0.22 + med * 0.12;
+      // sparse pits
+      const pit = Math.pow(Math.max(0, noise2(u * 90 + 2, v * 90) - 0.72), 2.0);
+      const k = jitter * (0.92 + patch * 0.08) * (1 - pit * 0.55);
+      img.data[i * 4] = Math.min(255, p[0] * k);
+      img.data[i * 4 + 1] = Math.min(255, p[1] * k);
+      img.data[i * 4 + 2] = Math.min(255, p[2] * k);
       img.data[i * 4 + 3] = 255;
-      height[i] = g * 0.8 + rnd() * 0.2;
+      // height: coarse grains taller, pits lower, quartz slightly proud
+      height[i] = (0.35 + med * 0.35 + coarse * 0.25 + fine * 0.15) * (1 - pit * 0.7) + (pIdx === 8 ? 0.08 : 0);
     }
+  }
+  // sparse shell/rock micro-debris
+  for (let n = 0; n < Math.floor(size * size * 0.00035); n++) {
+    const cx = (rnd() * size) | 0, cy = (rnd() * size) | 0;
+    const rad = 1 + (rnd() * 3) | 0;
+    const col = rnd() > 0.5 ? [210, 195, 170] : [70, 62, 52];
+    for (let dy = -rad; dy <= rad; dy++) for (let dx = -rad; dx <= rad; dx++) {
+      if (dx * dx + dy * dy > rad * rad) continue;
+      const x = (cx + dx + size) % size, y = (cy + dy + size) % size;
+      const i = (y * size + x) * 4;
+      const t = 1 - Math.hypot(dx, dy) / (rad + 0.01);
+      img.data[i] = img.data[i] * (1 - t) + col[0] * t;
+      img.data[i + 1] = img.data[i + 1] * (1 - t) + col[1] * t;
+      img.data[i + 2] = img.data[i + 2] * (1 - t) + col[2] * t;
+      height[y * size + x] += t * 0.35;
+    }
+  }
+  // sparse bright quartz sparkle glints in albedo (emissive-like bright flecks)
+  for (let n = 0; n < Math.floor(size * 0.9); n++) {
+    const x = (rnd() * size) | 0, y = (rnd() * size) | 0;
+    const i = (y * size + x) * 4;
+    img.data[i] = 245; img.data[i + 1] = 240; img.data[i + 2] = 228;
+    height[y * size + x] += 0.15;
   }
   ctx.putImageData(img, 0, 0);
   const albedo = canvasTexture(c);
@@ -113,8 +149,8 @@ export function makeSand(size = 1024, seed = 21) {
   const at = (x, y) => height[((y + size) % size) * size + ((x + size) % size)];
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
-      const dx = (at(x + 1, y) - at(x - 1, y)) * 2.2;
-      const dy = (at(x, y + 1) - at(x, y - 1)) * 2.2;
+      const dx = (at(x + 1, y) - at(x - 1, y)) * 3.4;
+      const dy = (at(x, y + 1) - at(x, y - 1)) * 3.4;
       const len = Math.hypot(dx, dy, 1);
       const i = (y * size + x) * 4;
       nimg.data[i] = (-dx / len * 0.5 + 0.5) * 255;

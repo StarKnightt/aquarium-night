@@ -65,33 +65,53 @@ function makeRock(seed, sx, sy, sz, seg, tone) {
   const col = new Float32Array(p.count * 3);
   const v = new THREE.Vector3();
   const s = seed * 7.31;
+  // pick 3–5 facet plane normals for irregular chamfered faces
+  const facets = [];
+  const rnd = mulberry32(seed * 91 + 3);
+  const nF = 3 + (rnd() * 3) | 0;
+  for (let f = 0; f < nF; f++) {
+    const a = rnd() * 6.28, b = (rnd() - 0.35) * 1.6;
+    facets.push([
+      Math.cos(a) * Math.cos(b),
+      Math.sin(b),
+      Math.sin(a) * Math.cos(b),
+      0.55 + rnd() * 0.35, // plane offset
+      0.04 + rnd() * 0.08, // chamfer soft width
+    ]);
+  }
   for (let i = 0; i < p.count; i++) {
     v.fromBufferAttribute(p, i).normalize();
-    // multi-scale: large form + mid pores + fine chips
-    const n = fbm3(v.x * 1.25 + s, v.y * 1.25 + s * 0.5, v.z * 1.25 - s, 4) * 0.34
-            + fbm3(v.x * 4.0 + s, v.y * 4.0, v.z * 4.0 - s, 3) * 0.075
-            + fbm3(v.x * 14 + s, v.y * 14, v.z * 14, 2) * 0.022
-            + fbm3(v.x * 32 + s, v.y * 32, v.z * 32, 2) * 0.008;
-    // strata planes (subtle sedimentary bands)
-    const strata = Math.sin((v.y * 3.2 + fbm3(v.x + s, v.z, 0, 2) * 0.4) * 9.0) * 0.012;
-    // chip facets: occasional flattened faces
-    const chip = Math.max(0, fbm3(v.x * 2.2 - s, v.y * 2.2, v.z * 2.2 + s, 2) - 0.55) * 0.06;
-    let r = 1 + n + strata - chip;
+    const n = fbm3(v.x * 1.25 + s, v.y * 1.25 + s * 0.5, v.z * 1.25 - s, 4) * 0.28
+            + fbm3(v.x * 4.0 + s, v.y * 4.0, v.z * 4.0 - s, 3) * 0.085
+            + fbm3(v.x * 14 + s, v.y * 14, v.z * 14, 2) * 0.028
+            + fbm3(v.x * 40 + s, v.y * 40, v.z * 40, 2) * 0.012;
+    const strata = Math.sin((v.y * 4.0 + fbm3(v.x + s, v.z, 0, 2) * 0.5) * 11.0) * 0.018;
+    // harder chip facets + plane cuts
+    let r = 1 + n + strata;
+    for (const [fx, fy, fz, off, soft] of facets) {
+      const d = v.x * fx + v.y * fy + v.z * fz - off;
+      if (d > -soft) {
+        const cut = Math.min(1, Math.max(0, (d + soft) / (soft * 2.2)));
+        r *= 1.0 - cut * 0.22;
+      }
+    }
+    const chip = Math.max(0, fbm3(v.x * 2.5 - s, v.y * 2.5, v.z * 2.5 + s, 2) - 0.48) * 0.09;
+    r -= chip;
     let yy = v.y;
     if (yy < 0) yy *= 0.78;
     p.setXYZ(i, v.x * r * sx, yy * r * sy, v.z * r * sz);
-    const m = 0.72 + 0.55 * (fbm3(v.x * 3.2 + s, v.y * 3.2, v.z * 3.2, 3) * 0.5 + 0.5);
-    const vein = Math.pow(Math.max(0, 1 - Math.abs(Math.sin((v.x * 2.1 + v.y * 1.3 + fbm3(v.x * 2 + s, v.y * 2, v.z * 2, 2) * 2.2) * 8.0)) * 3.2), 2.0);
-    const pore = Math.pow(Math.max(0, fbm3(v.x * 18 + s, v.y * 18, v.z * 18, 2) - 0.4), 1.5);
-    const film = Math.max(0, fbm3(v.x * 2.4 - s, v.y * 2.4, v.z * 2.4 + s, 3) + 0.05) * (0.35 + 0.65 * Math.max(0, v.y + 0.25));
-    // waterline stain band (slightly greener/darker mid-height)
-    const stain = Math.exp(-Math.pow((v.y - 0.15) * 4.0, 2.0)) * 0.12;
-    let rr = tone[0] * m + vein * 0.12 - pore * 0.08;
-    let gg = tone[1] * m + vein * 0.10 - pore * 0.05;
-    let bb = tone[2] * m + vein * 0.09 - pore * 0.04;
-    rr = rr * (1 - film * 0.45) + film * 0.05 - stain * 0.04;
-    gg = gg * (1 - film * 0.18) + film * 0.10 + stain * 0.02;
-    bb = bb * (1 - film * 0.60) + film * 0.018 - stain * 0.03;
+    const m = 0.68 + 0.58 * (fbm3(v.x * 3.2 + s, v.y * 3.2, v.z * 3.2, 3) * 0.5 + 0.5);
+    const vein = Math.pow(Math.max(0, 1 - Math.abs(Math.sin((v.x * 2.4 + v.y * 1.5 + fbm3(v.x * 2 + s, v.y * 2, v.z * 2, 2) * 2.4) * 9.0)) * 3.4), 2.0);
+    const pore = Math.pow(Math.max(0, fbm3(v.x * 22 + s, v.y * 22, v.z * 22, 2) - 0.38), 1.4);
+    const film = Math.max(0, fbm3(v.x * 2.4 - s, v.y * 2.4, v.z * 2.4 + s, 3) + 0.08) * (0.4 + 0.6 * Math.max(0, v.y + 0.2));
+    const moss = Math.pow(Math.max(0, fbm3(v.x * 6 - s, v.y * 5, v.z * 6, 3) - 0.35), 1.6) * Math.max(0, 0.55 - Math.abs(v.y));
+    const stain = Math.exp(-Math.pow((v.y - 0.12) * 4.0, 2.0)) * 0.14;
+    let rr = tone[0] * m + vein * 0.14 - pore * 0.12;
+    let gg = tone[1] * m + vein * 0.11 - pore * 0.07;
+    let bb = tone[2] * m + vein * 0.09 - pore * 0.05;
+    rr = rr * (1 - film * 0.5) + film * 0.04 - stain * 0.05 + moss * 0.02;
+    gg = gg * (1 - film * 0.2) + film * 0.11 + stain * 0.02 + moss * 0.08;
+    bb = bb * (1 - film * 0.65) + film * 0.016 - stain * 0.03 + moss * 0.03;
     col[i * 3] = rr; col[i * 3 + 1] = gg; col[i * 3 + 2] = bb;
   }
   g.setAttribute('color', new THREE.BufferAttribute(col, 3));
@@ -344,8 +364,8 @@ export function createScenery(scene) {
   const rnd = mulberry32(2024);
 
   // ---- sand
-  const { albedo, normal } = makeSand(Q.name === 'high' ? 1536 : 768);
-  albedo.repeat.set(9, 4); normal.repeat.set(9, 4);
+  const { albedo, normal } = makeSand(Q.name === 'high' ? 2048 : 768);
+  albedo.repeat.set(10, 4.5); normal.repeat.set(10, 4.5);
   const w = TANK.iw * 2 - 0.002, d = TANK.id * 2 - 0.002;
   const sgeo = new THREE.PlaneGeometry(w, d, Q.sandSeg[0], Q.sandSeg[1]);
   sgeo.rotateX(-Math.PI / 2);
@@ -366,8 +386,8 @@ export function createScenery(scene) {
   sgeo.computeVertexNormals();
   const sandMat = patchWater(
     new THREE.MeshStandardMaterial({
-      map: albedo, normalMap: normal, normalScale: new THREE.Vector2(1.55, 1.55),
-      roughness: 0.88, metalness: 0, vertexColors: true,
+      map: albedo, normalMap: normal, normalScale: new THREE.Vector2(2.1, 2.1),
+      roughness: 0.86, metalness: 0, vertexColors: true,
     }),
     {
       key: 'sand3',
@@ -416,7 +436,7 @@ export function createScenery(scene) {
   const rockMat = patchWater(
     new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.62, metalness: 0.06 }),
     {
-      key: 'rock3', soft: 1.2,
+      key: 'rock4', soft: 1.2,
       onShader(shader) {
         shader.fragmentShader = shader.fragmentShader.replace(
           '#include <roughnessmap_fragment>',
@@ -434,7 +454,7 @@ export function createScenery(scene) {
       },
     }
   );
-  const seg = [Q.rockSub * 14, Q.rockSub * 10];
+  const seg = [Q.rockSub * 16, Q.rockSub * 12];
   const rockDefs = ROCKS;
   const rocks = [];
   rockDefs.forEach((r, i) => {
