@@ -43,11 +43,10 @@ sys.food = createFood(scene, { water: sys.water, onEvent: onSim });
 sys.fish = createFish(scene, { scenery: sys.scenery, food: sys.food, water: sys.water, onEvent: onSim });
 sys.bubbles = createBubbles(scene, { water: sys.water, onEvent: onSim });
 
-// depth-aware god rays: half-res occlusion from sand/rocks/plants/fish bodies
+// depth-aware god rays: half-res occlusion from sand/rocks/fish (plants skipped — soft scatter, expensive depth)
 {
   const occ = [];
   if (sys.scenery?.sand) occ.push(sys.scenery.sand);
-  if (sys.scenery?.plants) occ.push(sys.scenery.plants);
   sys.scenery?.group?.traverse((o) => {
     if (o.isMesh && o !== sys.scenery.sand && o !== sys.scenery.plants && o.geometry && !o.material?.transparent) occ.push(o);
   });

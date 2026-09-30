@@ -305,6 +305,7 @@ function createRays(renderer) {
     return p;
   }
 
+  let occFrame = 0;
   function updateOcclusion(camera) {
     if (Q.name !== 'high' || !occluders.length) {
       mat.uniforms.uOccOn.value = 0.0;
@@ -313,6 +314,9 @@ function createRays(renderer) {
     mat.uniforms.uOccOn.value = 1.0;
     viewProj.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
     mat.uniforms.uViewProj.value.copy(viewProj);
+
+    // rebuild depth every other frame — shafts are soft so temporal lag is invisible
+    if ((occFrame++ & 1) === 1) return;
 
     while (depthScene.children.length) depthScene.remove(depthScene.children[0]);
     for (const o of occluders) {
