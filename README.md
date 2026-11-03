@@ -123,3 +123,5 @@ scripts/           capture, explore and behaviour harnesses (Playwright)
 ## Licence
 
 MIT.
+
+☕ like it? [buy me a coffee](https://buymeacoffee.com/prasenx) or [sponsor on github](https://github.com/sponsors/StarKnightt)
